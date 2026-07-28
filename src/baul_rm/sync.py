@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import errno
 import json
 import os
 import shutil
@@ -274,6 +275,47 @@ def publish_outputs(
     return stats
 
 
+def _pid_is_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        process_query = 0x1000
+        still_active = 259
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.GetExitCodeProcess.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+        handle = kernel32.OpenProcess(process_query, False, pid)
+        if not handle:
+            return ctypes.get_last_error() == 5
+        try:
+            exit_code = wintypes.DWORD()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return True
+            return exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError as exc:
+        return exc.errno != errno.ESRCH
+    return True
+
+
 class RunLock:
     def __init__(self, lock_path: Path, stale_after_hours: int = 24) -> None:
         self.path = lock_path
@@ -284,13 +326,19 @@ class RunLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.path.exists():
             age = dt.datetime.now() - dt.datetime.fromtimestamp(self.path.stat().st_mtime)
-            if age <= self.stale_after:
-                details = self.path.read_text(encoding="utf-8", errors="replace").strip()
+            details = self.path.read_text(encoding="utf-8", errors="replace").strip()
+            try:
+                payload = json.loads(details)
+                pid = payload.get("pid") if isinstance(payload, dict) else None
+            except json.JSONDecodeError:
+                pid = None
+            active = isinstance(pid, int) and _pid_is_running(pid)
+            if active or (pid is None and age <= self.stale_after):
                 raise RuntimeError(
                     f"Ein anderer Lauf ist bereits aktiv ({self.path}; {details or 'keine Details'})."
                 )
             stale = self.path.with_name(
-                f"{self.path.name}.stale-{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+                f"{self.path.name}.stale-{dt.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
             )
             os.replace(self.path, stale)
 

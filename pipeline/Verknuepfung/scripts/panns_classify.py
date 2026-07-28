@@ -105,6 +105,24 @@ def infer_probs(x, sr):
     out, _ = _AT.inference(x[None, :])
     return out[0]
 
+def infer_probs_batch(clips, sr):
+    """Roh-Wahrscheinlichkeiten fuer gleich lange Clips als Stapel."""
+    _ensure_model()
+    prepared = []
+    for clip in clips:
+        if sr != 32000:
+            clip = resample_poly(clip, 32000, sr).astype(np.float32)
+        else:
+            clip = np.asarray(clip, dtype=np.float32)
+        prepared.append(clip)
+    if not prepared:
+        return np.empty((0, 527), dtype=np.float32)
+    lengths = {len(clip) for clip in prepared}
+    if len(lengths) != 1:
+        raise ValueError("Batch enthaelt unterschiedlich lange Audio-Clips")
+    out, _ = _AT.inference(np.stack(prepared))
+    return np.asarray(out, dtype=np.float32)
+
 def classify_probs(probs):
     """Aus Roh-Wahrscheinlichkeiten -> (kategorie, konfidenz, top_audioset, scores)."""
     _load_labels()

@@ -26,6 +26,7 @@ Output: Aufbereit_v2/Laermquellen/ und Aufbereit_v2/Dauerlaermtabelle/
 Skript-Version: 06_report_v2 (Beschriftung+Nacht rev. 2026-06)
 """
 import os, sys, csv, glob, datetime, shutil
+import textwrap
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 import numpy as np
 import pandas as pd
@@ -640,7 +641,13 @@ kpi_lines.append(
     f"Lr (Takt 5s, TA-Laerm-Methodik, nur informativ): {fmt(lr_tag)} dB(A) [KI≈{fmt(ki_tag)}]")
 kpi_lines.append(f"Geraet: PCE-323 Kl.2 (IEC 61672)  |  AVV-Bewertung: LAeq")
 
-kpi = "\n".join(kpi_lines).replace(".",",")
+wrapped_kpi_lines = [
+    textwrap.fill(
+        line, width=105, subsequent_indent="  ", break_long_words=False
+    )
+    for line in kpi_lines
+]
+kpi = "\n".join(wrapped_kpi_lines).replace(".",",")
 kpi_txt = ax.text(0.012, 0.975, "Kennzahlen\n"+kpi, transform=ax.transAxes,
         va="top", ha="left", fontsize=8.0, family="DejaVu Sans",
         bbox=dict(boxstyle="round,pad=0.5", fc="white", ec="#AAAAAA"), zorder=12)

@@ -119,9 +119,9 @@ def build_sheet(title, rows, fields, link_col, link_path_col, conf_col=None, dba
     # Spaltenbreiten
     for j, h in enumerate(fields, 1):
         w = {"scores": 40, "WAV": 26, "lautester_Clip": 26, "repr_Clip": 26,
-             "Quellen_Detail": 34, "Kriterium": 15, "Laermquelle_Auto": 14,
-             "Laermquelle_KI": 16, "KI_AudioSet": 42, "KI_Konfidenz": 11,
-             "Dauerbetrieb_Regel": 14, "Laermquelle_geprueft": 16}.get(h, max(9, min(16, len(h) + 3)))
+             "Quellen_Detail": 38, "Kriterium": 15, "Laermquelle_Auto": 20,
+             "Laermquelle_KI": 28, "KI_AudioSet": 46, "KI_Konfidenz": 11,
+             "Dauerbetrieb_Regel": 16, "Laermquelle_geprueft": 28}.get(h, max(9, min(16, len(h) + 3)))
         ws.column_dimensions[get_column_letter(j)].width = w
     ws.row_dimensions[1].height = 30
     return ws

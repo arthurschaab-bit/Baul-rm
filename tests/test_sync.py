@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -87,6 +88,17 @@ class SyncTests(unittest.TestCase):
                 with RunLock(lock_path):
                     pass
         self.assertFalse(lock_path.exists())
+
+    def test_run_lock_recovers_dead_pid_immediately(self) -> None:
+        lock_path = self.root / "locks" / "run.lock"
+        lock_path.parent.mkdir(parents=True)
+        lock_path.write_text(json.dumps({"pid": 2147483647}), encoding="utf-8")
+        with RunLock(lock_path):
+            self.assertTrue(lock_path.exists())
+            stale = list(lock_path.parent.glob("run.lock.stale-*"))
+            self.assertEqual(len(stale), 1)
+        self.assertFalse(lock_path.exists())
+
 
 
 if __name__ == "__main__":

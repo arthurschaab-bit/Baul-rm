@@ -66,6 +66,16 @@ unter `.baul-rm/quarantine/` im Cache abgelegt.
 - private Berichtsdaten liegen nur in der ignorierten lokalen Konfiguration
 - Messdaten und große Ergebnis-Caches bleiben durch `.gitignore` aus Git heraus
 
+## Neu in v10.1
+
+- PANNs-Inferenz verarbeitet gleich geformte WAV-Clips gebuendelt statt einzeln.
+- Der Audio-Cache wird konsistent geprueft, atomar gespeichert und regelmaessig gesichert.
+- Doppelte WAV-Verweise werden vor der Inferenz entfernt.
+- Verwaiste Lauf-Sperren mit nicht mehr existierendem Prozess werden sofort freigegeben.
+- Mehrfach fehlcodierte UTF-8-Berichtstexte werden beim Start sicher normalisiert.
+- Breitere KI- und Pruefspalten verbessern die Lesbarkeit der Excel-Arbeitsmappe.
+- Tagesbericht-Infoboxen werden ohne Ueberdeckung kontrolliert umgebrochen.
+
 ## Abhängigkeiten
 
 ```powershell

@@ -40,6 +40,38 @@ def _read_config(path: Path) -> dict[str, Any]:
         raise ValueError(f"Konfiguration muss ein JSON-Objekt sein: {path}")
     return data
 
+_MOJIBAKE_MARKERS = ("\u00c3", "\u00c2", "\u00e2")
+
+
+def _repair_text_tree(value: Any) -> Any:
+    """Repair common UTF-8/Windows-1252 mojibake in nested config values."""
+    if isinstance(value, dict):
+        return {key: _repair_text_tree(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_repair_text_tree(item) for item in value]
+    if not isinstance(value, str) or not any(
+        marker in value for marker in _MOJIBAKE_MARKERS
+    ):
+        return value
+
+    text = value
+    for _ in range(3):
+        old_score = sum(text.count(marker) for marker in _MOJIBAKE_MARKERS)
+        improved = False
+        for encoding in ("cp1252", "latin-1"):
+            try:
+                candidate = text.encode(encoding).decode("utf-8")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                continue
+            new_score = sum(candidate.count(marker) for marker in _MOJIBAKE_MARKERS)
+            if new_score < old_score:
+                text = candidate
+                improved = True
+                break
+        if not improved:
+            break
+    return text
+
 
 def _fmt_bytes(value: int) -> str:
     units = ("B", "KB", "MB", "GB", "TB")
@@ -128,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         raise ValueError("cache_root darf nicht innerhalb des Cloud-Ordners liegen.")
 
-    report = config.get("report", {})
+    report = _repair_text_tree(config.get("report", {}))
     if not isinstance(report, dict):
         raise ValueError("report muss in der Konfiguration ein JSON-Objekt sein.")
     output_prefix = str(report.get("output_prefix", "Schallmessung"))
