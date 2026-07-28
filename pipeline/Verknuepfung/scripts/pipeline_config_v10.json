@@ -1,0 +1,20 @@
+{
+    "version":  "v10",
+    "version_str":  "07_gesamtbericht v10 (2026-07) [gesamtbericht_lib_v4]",
+    "gesamtbericht_pdf":  "Gesamtbericht_Schallmessung_v10.pdf",
+    "gesamtbericht_pdf_ohne_wav":  "Gesamtbericht_Schallmessung_v10_ohne_WAV.pdf",
+    "manifest_csv":  "Rohdaten_Manifest_v10.csv",
+    "video_audit_csv":  "Videobelege_Pruefung_v10.csv",
+    "relevant_threshold_dba":  60.0,
+    "daily_report_script":  "06_report_v2.py",
+    "relevant_script":  "03_relevant_v7.py",
+    "dauerlaerm_script":  "05_dauerlaerm_v7.py",
+    "gesamtbericht_script":  "07_gesamtbericht_v10.py",
+    "coverage_valid":  0.9,
+    "coverage_window":  0.7,
+    "daily_workers":  3,
+    "notes":  [
+                  "Pipeline v10: lokaler Arbeitscache, inkrementelle Stufen und portable Hashes.",
+                  "Fachliche Pegel- und Bewertungsformeln entsprechen der verifizierten v9-Basis."
+              ]
+}

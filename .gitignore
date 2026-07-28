@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.venv/
+venv/
+
+settings.local.json
+
+# Falls jemand den Laufordner versehentlich im Repository konfiguriert:
+runtime/
+20??-??-?? *.csv
+Laermprotokoll_*.zip
+Verknuepfung/*.csv
+Verknuepfung/*.xlsx
+Verknuepfung/*.npy
+Verknuepfung/relevante_wavs/
+Aufbereit/
+Aufbereit_v2/

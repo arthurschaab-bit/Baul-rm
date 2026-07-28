@@ -1,0 +1,8 @@
+matplotlib>=3.8
+numpy>=1.26
+openpyxl>=3.1
+pandas>=2.2
+scipy>=1.12
+
+# Nur fuer neue WAV-Klassifizierungen erforderlich:
+panns-inference>=0.1.1

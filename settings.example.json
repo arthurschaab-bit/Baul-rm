@@ -1,0 +1,16 @@
+{
+    "cloud_root":  "F:\\Pfad\\zum\\Schallmessungsordner",
+    "cache_root":  "%LOCALAPPDATA%\\Baul-rm\\workspace",
+    "sync_back":  true,
+    "report":  {
+                   "address":  "Messadresse",
+                   "tenant":  "Auftraggeber",
+                   "site_title":  "Messstandort",
+                   "output_prefix":  "Schallmessung",
+                   "legal_note":  "Gebietscharakter lokal dokumentiert.",
+                   "setup_groups":  [
+
+                                    ]
+               },
+    "minimum_free_gb":  5
+}
