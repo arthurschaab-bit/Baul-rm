@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 from pathlib import Path
 
@@ -58,6 +59,24 @@ class OpenAIClusterTests(unittest.TestCase):
             result = openai_clusters.safe_openai_audio_request()
         self.assertEqual(result["label"], "Unklar/Mischgeraeusch")
         self.assertIn("offline", result["summary"])
+
+    def test_missing_wav_is_loaded_from_daily_zip(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            zip_path = root / "Laermprotokoll_08.07.2026.zip"
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr("nested/noise_test.wav", b"wav-payload")
+            resolved = openai_clusters.resolve_wav_path(
+                {
+                    "Datum": "2026-07-08",
+                    "WAV": "noise_test.wav",
+                    "WAV_Pfad": "relevante_wavs/2026-07-08/noise_test.wav",
+                },
+                root / "cache",
+                working_dir=root / "working",
+                zip_root=root,
+            )
+            self.assertEqual(resolved.read_bytes(), b"wav-payload")
 
     def test_cluster_results_never_touch_days_before_start_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

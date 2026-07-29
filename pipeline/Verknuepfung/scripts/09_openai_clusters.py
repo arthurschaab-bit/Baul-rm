@@ -21,6 +21,7 @@ import time
 import urllib.error
 import urllib.request
 import wave
+import zipfile
 from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
@@ -214,6 +215,44 @@ def canonical_wav_bytes(path: Path, max_seconds: float = 8.0) -> bytes:
         target.setframerate(rate)
         target.writeframes(frames)
     return out.getvalue()
+
+
+def resolve_wav_path(
+    row: dict[str, str],
+    cache_dir: Path,
+    *,
+    working_dir: Path = VK,
+    zip_root: Path = BASE,
+) -> Path:
+    """Liefert eine WAV-Datei direkt oder stellt sie aus dem Tages-ZIP bereit."""
+    relative = row.get("WAV_Pfad", "")
+    candidate = working_dir / relative if relative else Path()
+    if relative and candidate.is_file():
+        return candidate
+
+    wav_name = (row.get("WAV") or "").strip()
+    day = (row.get("Datum") or "").strip()
+    if not wav_name or len(day) != 10:
+        raise FileNotFoundError(f"WAV-Pfad unvollstaendig: {wav_name or '?'}")
+    zip_path = zip_root / f"Laermprotokoll_{day[8:10]}.{day[5:7]}.{day[:4]}.zip"
+    if not zip_path.is_file():
+        raise FileNotFoundError(f"Tages-ZIP fehlt fuer {wav_name}: {zip_path}")
+
+    target = cache_dir / day / wav_name
+    if target.is_file():
+        return target
+    with zipfile.ZipFile(zip_path) as archive:
+        members = [name for name in archive.namelist() if Path(name).name == wav_name]
+        if len(members) != 1:
+            raise FileNotFoundError(
+                f"{wav_name} im Tages-ZIP nicht eindeutig gefunden ({len(members)} Treffer)"
+            )
+        payload = archive.read(members[0])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    temporary.write_bytes(payload)
+    os.replace(temporary, target)
+    return target
 
 
 def system_prompt() -> str:
@@ -456,6 +495,7 @@ def main(argv: list[str] | None = None) -> int:
 
     output = BASE / "Aufbereit_v2" / f"OpenAI_Cluster_ab_{args.from_date.replace('-', '')}"
     cache_dir = output / "api_cache"
+    wav_cache = output / "_wav_cache"
     output.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
     api_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
@@ -504,7 +544,7 @@ def main(argv: list[str] | None = None) -> int:
             result = dict(cached["result"])
         elif use_api:
             first_samples = [
-                (by_wav[names[index]], VK / by_wav[names[index]]["WAV_Pfad"])
+                (by_wav[names[index]], resolve_wav_path(by_wav[names[index]], wav_cache))
                 for index in core
                 if names[index] in by_wav
             ]
@@ -523,7 +563,7 @@ def main(argv: list[str] | None = None) -> int:
                 and (not result["homogeneous"] or result["confidence"] < args.min_confidence)
             ):
                 second_samples = [
-                    (by_wav[names[index]], VK / by_wav[names[index]]["WAV_Pfad"])
+                    (by_wav[names[index]], resolve_wav_path(by_wav[names[index]], wav_cache))
                     for index in core + more
                     if names[index] in by_wav
                 ]
