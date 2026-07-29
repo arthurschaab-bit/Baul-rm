@@ -59,20 +59,21 @@ class OpenAIClusterTests(unittest.TestCase):
         self.assertEqual(result["label"], "Unklar/Mischgeraeusch")
         self.assertIn("offline", result["summary"])
 
-    def test_cluster_results_never_touch_days_after_cutoff(self) -> None:
+    def test_cluster_results_never_touch_days_before_start_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             event_path = Path(temp) / "relevante_ereignisse.csv"
             event_path.write_text(
                 "Datum,WAV,Laermquelle_geprueft\n"
+                "2026-07-07,old.wav,\n"
                 "2026-07-08,a.wav,\n"
                 "2026-07-09,b.wav,\n",
                 encoding="utf-8-sig",
             )
             applied, conflicts = openai_clusters.apply_cluster_results(
                 event_path=event_path,
-                until="2026-07-08",
+                from_date="2026-07-08",
                 model="gpt-audio-1.5",
-                wav_to_cluster={"a.wav": "C000", "b.wav": "C000"},
+                wav_to_cluster={"old.wav": "C000", "a.wav": "C000", "b.wav": "C000"},
                 results={
                     "C000": {
                         "status": "ki_bestaetigt",
@@ -81,10 +82,13 @@ class OpenAIClusterTests(unittest.TestCase):
                     }
                 },
             )
-            self.assertEqual((applied, conflicts), (1, 0))
-            rows = openai_clusters.read_event_rows(event_path, "9999-12-31")
-            self.assertEqual(rows[0]["Laermquelle_Cluster"], "Fahrzeug")
-            self.assertEqual(rows[1]["Laermquelle_Cluster"], "")
+            self.assertEqual((applied, conflicts), (2, 0))
+            rows = openai_clusters.read_event_rows(event_path, "0000-01-01")
+            self.assertEqual(rows[0]["Laermquelle_Cluster"], "")
+            self.assertEqual(rows[1]["Laermquelle_Cluster"], "Fahrzeug")
+            self.assertEqual(rows[2]["Laermquelle_Cluster"], "Fahrzeug")
+            selected = openai_clusters.read_event_rows(event_path, "2026-07-08")
+            self.assertEqual([row["WAV"] for row in selected], ["a.wav", "b.wav"])
 
 
 if __name__ == "__main__":

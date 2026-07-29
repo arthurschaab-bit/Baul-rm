@@ -32,7 +32,7 @@ STATE_PATH = OUTDIR / "automation_state_v10.json"
 FALLBACK_STATE_PATH = OUTDIR / "automation_state_v8.json"
 TEMPLATE_CONFIG_PATH = HERE / "pipeline_config_v10.json"
 CONFIG_PATH = OUTDIR / "pipeline_config_v10.runtime.json"
-VERSION = "v10.2"
+VERSION = "v10.2.1"
 RUN_ID = core.now_stamp()
 
 RUN_LOG = core.RUN_LOG
@@ -60,8 +60,8 @@ CORE_BACKUP_FILES = [
 OUTPUT_PREFIX = os.environ.get("BAUL_RM_OUTPUT_PREFIX", "Schallmessung")
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "version": "v10.2",
-    "version_str": "07_gesamtbericht v10.2 (2026-07) [gesamtbericht_lib_v4]",
+    "version": "v10.2.1",
+    "version_str": "07_gesamtbericht v10.2.1 (2026-07) [gesamtbericht_lib_v4]",
     "gesamtbericht_pdf": f"Gesamtbericht_{OUTPUT_PREFIX}_v10.pdf",
     "gesamtbericht_pdf_ohne_wav": f"Gesamtbericht_{OUTPUT_PREFIX}_v10_ohne_WAV.pdf",
     "manifest_csv": "Rohdaten_Manifest_v10.csv",
@@ -73,7 +73,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "gesamtbericht_script": "07_gesamtbericht_v10.py",
     "openai_clusters": {
         "enabled": False,
-        "until": "2026-07-08",
+        "from": "2026-07-08",
         "model": "gpt-audio-1.5",
     },
     "coverage_valid": 0.90,
@@ -204,7 +204,7 @@ def write_pipeline_config(discovery: dict[str, Any]) -> dict[str, Any]:
     cluster_config.update(
         {
             "enabled": os.environ.get("BAUL_RM_OPENAI_CLUSTER_ENABLED", "0") == "1",
-            "until": os.environ.get("BAUL_RM_OPENAI_CLUSTER_UNTIL", "2026-07-08"),
+            "from": os.environ.get("BAUL_RM_OPENAI_CLUSTER_FROM", "2026-07-08"),
             "model": os.environ.get("BAUL_RM_OPENAI_AUDIO_MODEL", "gpt-audio-1.5"),
         }
     )
@@ -445,9 +445,9 @@ def main() -> int:
 
         openai_config = config.get("openai_clusters", {})
         openai_enabled = bool(openai_config.get("enabled", False))
-        openai_until = str(openai_config.get("until", "2026-07-08"))
+        openai_from = str(openai_config.get("from", "2026-07-08"))
         openai_model = str(openai_config.get("model", "gpt-audio-1.5"))
-        openai_package = OUTDIR / f"OpenAI_Cluster_bis_{openai_until.replace('-', '')}"
+        openai_package = OUTDIR / f"OpenAI_Cluster_ab_{openai_from.replace('-', '')}"
         openai_needed = (
             openai_enabled
             and (
@@ -461,7 +461,7 @@ def main() -> int:
         if openai_needed:
             core.run_step(
                 "09_openai_clusters",
-                [str(HERE / "09_openai_clusters.py"), "--until", openai_until, "--model", openai_model],
+                [str(HERE / "09_openai_clusters.py"), "--from-date", openai_from, "--model", openai_model],
                 required=False,
             )
         elif openai_enabled:

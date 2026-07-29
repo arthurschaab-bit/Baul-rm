@@ -173,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
     if not isinstance(openai_audio, dict):
         raise ValueError("openai_audio muss in der Konfiguration ein JSON-Objekt sein.")
     openai_enabled = bool(openai_audio.get("enabled", False))
-    openai_until = str(openai_audio.get("until", "2026-07-08"))
+    openai_from = str(openai_audio.get("from", "2026-07-08"))
     openai_model = str(openai_audio.get("model", "gpt-audio-1.5"))
 
     output_prefix = str(report.get("output_prefix", "Schallmessung"))
@@ -199,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
         "BAUL_RM_OUTPUT_PREFIX": output_prefix,
         "BAUL_RM_PHOTO_ROOT": str(photo_target),
         "BAUL_RM_OPENAI_CLUSTER_ENABLED": "1" if openai_enabled else "0",
-        "BAUL_RM_OPENAI_CLUSTER_UNTIL": openai_until,
+        "BAUL_RM_OPENAI_CLUSTER_FROM": openai_from,
         "BAUL_RM_OPENAI_AUDIO_MODEL": openai_model,
     }
     print(f"Baul-rm v{__version__}")
@@ -284,14 +284,14 @@ def main(argv: list[str] | None = None) -> int:
             runinfo = (
                 runtime_root
                 / "Aufbereit_v2"
-                / f"OpenAI_Cluster_bis_{openai_until.replace('-', '')}"
+                / f"OpenAI_Cluster_ab_{openai_from.replace('-', '')}"
                 / "laufinfo.json"
             )
             info = _read_config(runinfo) if runinfo.is_file() else {}
             openai_pending = (
                 not info
                 or info.get("model") != openai_model
-                or info.get("until") != openai_until
+                or info.get("from") != openai_from
                 or (bool(os.environ.get("OPENAI_API_KEY")) and not info.get("api_executed"))
             )
 

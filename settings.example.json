@@ -15,7 +15,7 @@
                },
     "openai_audio":  {
                          "enabled":  false,
-                         "until":  "2026-07-08",
+                         "from":  "2026-07-08",
                          "model":  "gpt-audio-1.5"
                      },
     "minimum_free_gb":  5

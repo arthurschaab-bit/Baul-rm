@@ -4,7 +4,7 @@
 Die lokalen PANNs-Wahrscheinlichkeiten bilden akustisch aehnliche Gruppen. Nur
 wenige repraesentative WAVs je Gruppe werden anschliessend von einem Audio-Modell
 klassifiziert. API-Antworten werden pro Cluster gecacht. Der fachlich festgelegte
-Stichtag ist standardmaessig der 08.07.2026 (einschliesslich).
+Startdatum ist standardmaessig der 08.07.2026 (einschliesslich).
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ BASE = VK.parent
 EVENTS = VK / "relevante_ereignisse.csv"
 PROB_NPY = VK / "panns_probs.npy"
 PROB_IDX = VK / "panns_probs_index.json"
-DEFAULT_UNTIL = "2026-07-08"
+DEFAULT_FROM = "2026-07-08"
 DEFAULT_MODEL = "gpt-audio-1.5"
 PROMPT_VERSION = "baustelle-mischgeraeusche-v1"
 CATEGORIES = [
@@ -59,12 +59,12 @@ CATEGORY_ALIASES = {
 }
 
 
-def read_event_rows(path: Path, until: str) -> list[dict[str, str]]:
+def read_event_rows(path: Path, from_date: str) -> list[dict[str, str]]:
     with path.open(newline="", encoding="utf-8-sig") as handle:
         return [
             dict(row)
             for row in csv.DictReader(handle)
-            if (row.get("Datum") or "") <= until and row.get("WAV")
+            if (row.get("Datum") or "") >= from_date and row.get("WAV")
         ]
 
 
@@ -84,7 +84,7 @@ def load_selected_probabilities(
     missing = [name for name in wanted if name not in lookup]
     if missing:
         print(
-            f"WARNUNG: {len(missing)} WAVs bis zum Stichtag fehlen im PANNs-Cache; "
+            f"WARNUNG: {len(missing)} WAVs ab dem Startdatum fehlen im PANNs-Cache; "
             "sie werden nicht geclustert."
         )
     names = [name for name in wanted if name in lookup]
@@ -353,9 +353,9 @@ def safe_openai_audio_request(**kwargs: Any) -> dict[str, Any]:
         }
 
 
-def cluster_signature(model: str, until: str, names: list[str]) -> str:
+def cluster_signature(model: str, from_date: str, names: list[str]) -> str:
     payload = json.dumps(
-        {"model": model, "until": until, "prompt": PROMPT_VERSION, "samples": names},
+        {"model": model, "from": from_date, "prompt": PROMPT_VERSION, "samples": names},
         sort_keys=True,
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -382,7 +382,7 @@ def write_semicolon_csv(path: Path, rows: list[dict[str, Any]], fields: list[str
 def apply_cluster_results(
     *,
     event_path: Path,
-    until: str,
+    from_date: str,
     model: str,
     wav_to_cluster: dict[str, str],
     results: dict[str, dict[str, Any]],
@@ -397,7 +397,7 @@ def apply_cluster_results(
             fields.append(column)
     applied = conflicts = 0
     for row in rows:
-        if (row.get("Datum") or "") > until:
+        if (row.get("Datum") or "") < from_date:
             continue
         cluster = wav_to_cluster.get(row.get("WAV", ""))
         result = results.get(cluster or "")
@@ -433,7 +433,10 @@ def apply_cluster_results(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--until", default=os.environ.get("BAUL_RM_OPENAI_CLUSTER_UNTIL", DEFAULT_UNTIL))
+    parser.add_argument(
+        "--from-date",
+        default=os.environ.get("BAUL_RM_OPENAI_CLUSTER_FROM", DEFAULT_FROM),
+    )
     parser.add_argument("--model", default=os.environ.get("BAUL_RM_OPENAI_AUDIO_MODEL", DEFAULT_MODEL))
     parser.add_argument("--k", type=int, default=120)
     parser.add_argument("--samples", type=int, default=3)
@@ -442,16 +445,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prepare-only", action="store_true")
     args = parser.parse_args(argv)
 
-    rows = read_event_rows(EVENTS, args.until)
+    rows = read_event_rows(EVENTS, args.from_date)
     names, probabilities = load_selected_probabilities(rows)
-    print(f"OpenAI-Cluster: {len(names)} WAVs bis einschliesslich {args.until}")
+    print(f"OpenAI-Cluster: {len(names)} WAVs ab einschliesslich {args.from_date}")
     features = build_cluster_features(probabilities)
     _, labels, similarity = cluster_features(features, k=args.k)
     by_wav: dict[str, dict[str, str]] = {}
     for row in rows:
         by_wav.setdefault(row["WAV"], row)
 
-    output = BASE / "Aufbereit_v2" / f"OpenAI_Cluster_bis_{args.until.replace('-', '')}"
+    output = BASE / "Aufbereit_v2" / f"OpenAI_Cluster_ab_{args.from_date.replace('-', '')}"
     cache_dir = output / "api_cache"
     output.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -482,7 +485,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         sample_indices = core + more
         sample_names = [names[index] for index in sample_indices]
-        signature = cluster_signature(args.model, args.until, sample_names)
+        signature = cluster_signature(args.model, args.from_date, sample_names)
         cache_path = cache_dir / f"{cluster_id}.json"
         cached: dict[str, Any] | None = None
         if cache_path.is_file():
@@ -548,7 +551,7 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "signature": signature,
                     "model": args.model,
-                    "until": args.until,
+                    "from": args.from_date,
                     "prompt_version": PROMPT_VERSION,
                     "samples": sample_names,
                     "result": result,
@@ -628,7 +631,7 @@ def main(argv: list[str] | None = None) -> int:
     atomic_json(
         output / "laufinfo.json",
         {
-            "until": args.until,
+            "from": args.from_date,
             "model": args.model,
             "prompt_version": PROMPT_VERSION,
             "clips": len(names),
@@ -640,7 +643,7 @@ def main(argv: list[str] | None = None) -> int:
 
     applied, conflicts = apply_cluster_results(
         event_path=EVENTS,
-        until=args.until,
+        from_date=args.from_date,
         model=args.model,
         wav_to_cluster=wav_to_cluster,
         results=results,
@@ -650,7 +653,7 @@ def main(argv: list[str] | None = None) -> int:
     if not use_api:
         print(
             "Naechster Schritt: OPENAI_API_KEY lokal setzen und dieses Skript erneut starten; "
-            "der Stichtag bleibt unveraendert."
+            "das Startdatum bleibt unveraendert."
         )
     return 0
 
