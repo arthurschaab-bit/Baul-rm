@@ -11,6 +11,9 @@ from typing import Iterable, Iterator, Sequence
 
 
 RAW_PATTERNS = ("20??-??-?? *.csv", "Laermprotokoll_*.zip")
+REPORT_IMAGE_DIRS = ("Fotos_Aufbau", "Lageplan")
+REPORT_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"}
+
 
 BOOTSTRAP_FILES = (
     "Verknuepfung/master_index.csv",
@@ -55,6 +58,9 @@ PUBLISH_GLOBS = (
     "Aufbereit_v2/Laermquellen/*.pdf",
     "Aufbereit_v2/Dauerlaermtabelle/*.pdf",
     "Aufbereit_v2/autolauf_v10/*.md",
+    "Aufbereit_v2/OpenAI_Cluster_*/*.csv",
+    "Aufbereit_v2/OpenAI_Cluster_*/*.json",
+    "Aufbereit_v2/OpenAI_Cluster_*/api_cache/*.json",
 )
 
 FAILURE_LOG_GLOBS = ("Aufbereit_v2/autolauf_v10/*.md",)
@@ -142,6 +148,37 @@ def sync_tree(source_root: Path, destination_root: Path, *, dry_run: bool = Fals
                 dry_run=dry_run,
             )
         )
+    return stats
+
+def sync_report_images(
+    photo_root: Path,
+    destination_root: Path,
+    *,
+    dry_run: bool = False,
+) -> SyncStats:
+    """Spiegelt nur die kleinen Bildbestaende fuer Messaufbau und Lageplan."""
+    stats = SyncStats()
+    if not photo_root.is_dir():
+        stats.warnings.append(f"Bildordner nicht gefunden: {photo_root}")
+        return stats
+
+    for directory in REPORT_IMAGE_DIRS:
+        source_dir = photo_root / directory
+        if not source_dir.is_dir():
+            stats.warnings.append(f"Bildunterordner nicht gefunden: {source_dir}")
+            continue
+        for source in iter_tree_files(source_dir):
+            if source.suffix.lower() not in REPORT_IMAGE_EXTENSIONS:
+                continue
+            relative = Path(directory) / source.relative_to(source_dir)
+            stats.merge(
+                copy_if_changed(
+                    source,
+                    destination_root / relative,
+                    relative,
+                    dry_run=dry_run,
+                )
+            )
     return stats
 
 

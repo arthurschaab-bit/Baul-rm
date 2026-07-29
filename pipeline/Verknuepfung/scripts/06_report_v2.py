@@ -245,7 +245,8 @@ def ev_dt(r):
     h,m,s = map(int, r["Uhrzeit"].split(":")); return day0 + pd.Timedelta(hours=h,minutes=m,seconds=s)
 def src_of(r):
     g = (r.get("Laermquelle_geprueft") or "").strip()
-    s = g if g else (r.get("Laermquelle_KI") or r.get("Laermquelle_Auto",""))
+    c = (r.get("Laermquelle_Cluster") or "").strip()
+    s = g if g else c if c else (r.get("Laermquelle_KI") or r.get("Laermquelle_Auto",""))
     return ALIAS.get(s,s)
 
 ev_bau = [r for r in ev if src_of(r) in BAU_RELEVANT]

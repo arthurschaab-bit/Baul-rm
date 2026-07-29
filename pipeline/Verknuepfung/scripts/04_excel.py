@@ -121,7 +121,9 @@ def build_sheet(title, rows, fields, link_col, link_path_col, conf_col=None, dba
         w = {"scores": 40, "WAV": 26, "lautester_Clip": 26, "repr_Clip": 26,
              "Quellen_Detail": 38, "Kriterium": 15, "Laermquelle_Auto": 20,
              "Laermquelle_KI": 28, "KI_AudioSet": 46, "KI_Konfidenz": 11,
-             "Dauerbetrieb_Regel": 16, "Laermquelle_geprueft": 28}.get(h, max(9, min(16, len(h) + 3)))
+             "Laermquelle_Cluster": 28, "Cluster_ID": 12,
+             "Cluster_Verifikation": 48, "Dauerbetrieb_Regel": 16,
+             "Laermquelle_geprueft": 28}.get(h, max(9, min(16, len(h) + 3)))
         ws.column_dimensions[get_column_letter(j)].width = w
     ws.row_dimensions[1].height = 30
     return ws
@@ -136,7 +138,7 @@ if dl:
 
 # ---------- Episoden ----------  (KI-Quelle je Episode aus den Ereignissen)
 from collections import defaultdict
-def src_of(r): return r.get("Laermquelle_KI") or r.get("Laermquelle_Auto", "")
+def src_of(r): return r.get("Laermquelle_Cluster") or r.get("Laermquelle_KI") or r.get("Laermquelle_Auto", "")
 ep_ki = defaultdict(lambda: defaultdict(float))
 for r in ev:
     if r.get("Episode") and src_of(r):
@@ -151,7 +153,8 @@ build_sheet("Episoden", ep, ep_fields, link_col="lautester_Clip",
             link_path_col="lautester_Clip_Pfad", dba_col="dBA_Spitze")
 
 # ---------- Ereignisse ----------  (KI primär; Heuristik + Merkmale als Referenz)
-ev_fields = ["Datum","Uhrzeit","dBA","Amplitude","Dauerbetrieb_Regel","Laermquelle_KI","KI_Konfidenz",
+ev_fields = ["Datum","Uhrzeit","dBA","Amplitude","Dauerbetrieb_Regel","Laermquelle_Cluster",
+             "Cluster_ID","Cluster_Verifikation","Laermquelle_KI","KI_Konfidenz",
              "Laermquelle_geprueft","KI_AudioSet","Laermquelle_Auto","Episode","WAV",
              "centroid_Hz","dom_Hz","e_tief_<250","e_hoch_>2k","impuls_crest",
              "silbentakt","grundton","scores"]

@@ -76,6 +76,25 @@ unter `.baul-rm/quarantine/` im Cache abgelegt.
 - Breitere KI- und Pruefspalten verbessern die Lesbarkeit der Excel-Arbeitsmappe.
 - Tagesbericht-Infoboxen werden ohne Ueberdeckung kontrolliert umgebrochen.
 
+
+## Neu in v10.2
+
+- Die reine Pegel-/Dauerregel erzeugt ab 20.07.2026 keine automatische
+  Tiefbohrer-Zuordnung mehr.
+- Noch nicht dokumentierte Aussen-Aufnahmeorte werden als `SO-Balkon` gefuehrt;
+  bereits dokumentierte Innen- und Wechselpositionen bleiben unveraendert.
+- Lageplan- und Messaufbau-Bilder werden selektiv in den lokalen Cache kopiert.
+  Videoarchive bleiben im Cloud-Bestand und werden nicht mitgespiegelt.
+- Eine lokale PANNs-Uebersegmentierung bildet bis einschliesslich 08.07.2026
+  akustische Cluster. `gpt-audio-1.5` beurteilt in bis zu zwei Runden nur kurze
+  repraesentative WAV-Ausschnitte. Mischungen aus Baustellen- und allgemeinen
+  Aussengeraeuschen werden ausdruecklich beruecksichtigt.
+- API-Antworten werden je Cluster gecacht. Ohne `OPENAI_API_KEY` wird das
+  Clusterpaket vorbereitet, aber es werden keine Daten an OpenAI gesendet.
+
+Der API-Schluessel wird nur als lokale Umgebungsvariable erwartet und gehoert
+nicht in `settings.local.json` oder Git. Der Stichtag bleibt dort separat als
+`openai_audio.until` konfiguriert.
 ## Abhängigkeiten
 
 ```powershell

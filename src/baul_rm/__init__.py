@@ -1,3 +1,3 @@
 """Lokale Ausfuehrungs- und Synchronisationsschicht fuer die Schallmessung."""
 
-__version__ = "10.1.0"
+__version__ = "10.2.0"

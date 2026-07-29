@@ -16,6 +16,7 @@ from baul_rm.sync import (
     bootstrap_files,
     publish_outputs,
     sync_raw_files,
+    sync_report_images,
 )
 
 
@@ -80,6 +81,21 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(result.copied, 1)
         self.assertTrue((self.cloud / "Aufbereit_v2" / "report.pdf").exists())
         self.assertFalse((self.cloud / raw.name).exists())
+
+    def test_report_image_sync_copies_only_required_image_folders(self) -> None:
+        photos = self.root / "Fotos_Videos"
+        write_file(photos / "Fotos_Aufbau" / "setup.jpg", b"jpg", 1_700_000_000_000_000_000)
+        write_file(photos / "Fotos_Aufbau" / "video.mp4", b"video", 1_700_000_000_000_000_000)
+        write_file(photos / "Lageplan" / "lage.png", b"png", 1_700_000_000_000_000_000)
+        write_file(photos / "Schallmessvideos" / "large.mp4", b"large", 1_700_000_000_000_000_000)
+
+        result = sync_report_images(photos, self.runtime / "Fotos_Videos")
+
+        self.assertEqual(result.copied, 2)
+        self.assertTrue((self.runtime / "Fotos_Videos" / "Fotos_Aufbau" / "setup.jpg").is_file())
+        self.assertTrue((self.runtime / "Fotos_Videos" / "Lageplan" / "lage.png").is_file())
+        self.assertFalse((self.runtime / "Fotos_Videos" / "Fotos_Aufbau" / "video.mp4").exists())
+        self.assertFalse((self.runtime / "Fotos_Videos" / "Schallmessvideos").exists())
 
     def test_run_lock_blocks_a_second_run(self) -> None:
         lock_path = self.root / "locks" / "run.lock"

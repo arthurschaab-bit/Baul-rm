@@ -8,9 +8,15 @@
                    "site_title":  "Messstandort",
                    "output_prefix":  "Schallmessung",
                    "legal_note":  "Gebietscharakter lokal dokumentiert.",
+                   "photo_root":  "F:\\Pfad\\zum\\Fotos_Videos-Ordner",
                    "setup_groups":  [
 
                                     ]
                },
+    "openai_audio":  {
+                         "enabled":  false,
+                         "until":  "2026-07-08",
+                         "model":  "gpt-audio-1.5"
+                     },
     "minimum_free_gb":  5
 }

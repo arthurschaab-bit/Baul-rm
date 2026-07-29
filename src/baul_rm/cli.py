@@ -18,6 +18,7 @@ from .sync import (
     publish_outputs,
     sync_control_files,
     sync_raw_files,
+    sync_report_images,
     sync_tree,
 )
 
@@ -120,6 +121,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cache-root", help="Persistenter lokaler Arbeitsordner")
     parser.add_argument("--full", action="store_true", help="Alle Auswertungsschritte erzwingen")
     parser.add_argument(
+        "--reports-only",
+        action="store_true",
+        help="Nur Excel-Uebersicht und Gesamtberichte neu erzeugen",
+    )
+    parser.add_argument(
         "--skip-audio",
         action="store_true",
         help="WAV-Auswertung verschieben; sie bleibt fuer den naechsten Lauf vorgemerkt",
@@ -163,11 +169,25 @@ def main(argv: list[str] | None = None) -> int:
     report = _repair_text_tree(config.get("report", {}))
     if not isinstance(report, dict):
         raise ValueError("report muss in der Konfiguration ein JSON-Objekt sein.")
+    openai_audio = config.get("openai_audio", {})
+    if not isinstance(openai_audio, dict):
+        raise ValueError("openai_audio muss in der Konfiguration ein JSON-Objekt sein.")
+    openai_enabled = bool(openai_audio.get("enabled", False))
+    openai_until = str(openai_audio.get("until", "2026-07-08"))
+    openai_model = str(openai_audio.get("model", "gpt-audio-1.5"))
+
     output_prefix = str(report.get("output_prefix", "Schallmessung"))
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", output_prefix):
         raise ValueError(
             "report.output_prefix darf nur Buchstaben, Zahlen, Punkt, Minus und Unterstrich enthalten."
         )
+    photo_value = report.get("photo_root")
+    photo_root = (
+        _expand_path(str(photo_value), config_path.parent)
+        if photo_value
+        else (cloud_root.parent / "Fotos_Videos").resolve()
+    )
+    photo_target = runtime_root / "Fotos_Videos"
     report_env = {
         "BAUL_RM_ADDRESS": str(report.get("address", "Messadresse")),
         "BAUL_RM_TENANT": str(report.get("tenant", "Auftraggeber")),
@@ -177,8 +197,11 @@ def main(argv: list[str] | None = None) -> int:
             report.get("setup_groups", []), ensure_ascii=False
         ),
         "BAUL_RM_OUTPUT_PREFIX": output_prefix,
+        "BAUL_RM_PHOTO_ROOT": str(photo_target),
+        "BAUL_RM_OPENAI_CLUSTER_ENABLED": "1" if openai_enabled else "0",
+        "BAUL_RM_OPENAI_CLUSTER_UNTIL": openai_until,
+        "BAUL_RM_OPENAI_AUDIO_MODEL": openai_model,
     }
-
     print(f"Baul-rm v{__version__}")
     print(f"Cloud: {cloud_root}")
     print(f"Lokal: {runtime_root}")
@@ -205,10 +228,16 @@ def main(argv: list[str] | None = None) -> int:
                 prune=not args.no_prune,
                 dry_run=True,
             )
+            preview_images = sync_report_images(
+                photo_root,
+                photo_target,
+                dry_run=True,
+            )
             required = (
                 preview_bootstrap.bytes_copied
                 + preview_control.bytes_copied
                 + preview_raw.bytes_copied
+                + preview_images.bytes_copied
             )
             _check_disk_space(
                 cache_root,
@@ -219,6 +248,13 @@ def main(argv: list[str] | None = None) -> int:
         code_stats = sync_tree(pipeline_source, runtime_root, dry_run=args.dry_run)
         _print_stats("Code", code_stats)
 
+
+        image_stats = sync_report_images(
+            photo_root,
+            photo_target,
+            dry_run=args.dry_run,
+        )
+        _print_stats("Berichtsbilder", image_stats)
         bootstrap_stats = bootstrap_files(
             cloud_root, runtime_root, dry_run=args.dry_run
         )
@@ -243,8 +279,26 @@ def main(argv: list[str] | None = None) -> int:
 
         pipeline = runtime_root / "Verknuepfung" / "scripts" / "auto_pipeline_v10.py"
         command = [sys.executable, str(pipeline)]
+        openai_pending = False
+        if openai_enabled:
+            runinfo = (
+                runtime_root
+                / "Aufbereit_v2"
+                / f"OpenAI_Cluster_bis_{openai_until.replace('-', '')}"
+                / "laufinfo.json"
+            )
+            info = _read_config(runinfo) if runinfo.is_file() else {}
+            openai_pending = (
+                not info
+                or info.get("model") != openai_model
+                or info.get("until") != openai_until
+                or (bool(os.environ.get("OPENAI_API_KEY")) and not info.get("api_executed"))
+            )
+
         if args.full:
             command.append("--full")
+        if args.reports_only:
+            command.append("--reports-only")
         if args.skip_audio:
             command.append("--skip-audio")
         if code_stats.copied and runtime_preexisting:
@@ -253,6 +307,8 @@ def main(argv: list[str] | None = None) -> int:
             command.append("--control-changed")
 
         print("\nLokale Auswertung startet ...", flush=True)
+        if openai_pending:
+            command.append("--openai-clusters")
         proc = subprocess.run(
             command,
             cwd=runtime_root,

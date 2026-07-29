@@ -3,7 +3,9 @@
 tiefbohrer.py
 Regelbasierte Tiefbohrer-Erkennung aus der dBA-Dauermessung (CSV), nach Vorgabe
 des Nutzers (gehörte Stichproben): Pegel > 65 dB(A) über > 1 min mit WENIG
-Pegelschwankung = Tiefbohrer. Gilt ab 08.06.2026.
+Pegelschwankung = Tiefbohrer. Gilt nur vom 08.06. bis einschliesslich 19.07.2026.
+Ab 20.07.2026 darf ein laengerer hoher Pegel nicht mehr automatisch als
+Tiefbohrer gewertet werden.
 
 "Wenig Schwankung" = gleitende Standardabweichung (Fenster WIN s) < MAX_STD dB,
 bei gleitendem Mittel > MIN_DB. Kurze Unterschreitungen <= GAP s werden überbrückt;
@@ -19,6 +21,7 @@ MIN_DUR = 60      # s:    Mindestdauer der Episode (> 1 min)
 GAP     = 15      # s:    kurze Unterschreitungen überbrücken
 WIN     = 30      # s:    Fenster für Mittel/Streuung
 AB_DATUM = "2026-06-08"   # Regel gilt ab diesem Tag
+BIS_DATUM = "2026-07-19"  # ab 20.07. keine automatische Tiefbohrer-Zuordnung
 
 def detect_spans(dba):
     """dba: pd.Series, 1-s-Raster (NaN in Lücken). -> Liste (start_ts, end_ts, leq, lmax)."""
@@ -65,7 +68,7 @@ def load_day_series(day, base):
     return s.reindex(pd.date_range(s.index[0], s.index[-1], freq="1s"))
 
 def spans_for_day(day, base):
-    if day < AB_DATUM:
+    if day < AB_DATUM or day > BIS_DATUM:
         return []
     s = load_day_series(day, base)
     return detect_spans(s) if s is not None else []
