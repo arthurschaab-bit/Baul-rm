@@ -19,7 +19,7 @@ VK = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(VK, "Laermquellen_Verknuepfung.xlsx")
 
 QUELLEN = ["Bagger","Bohrgeraet/schweres Geraet","Motor/Diesel","Schlagen/Bohren",
-           "Saege","Fahrzeug","Signal/Warnton","Sprache","Umgebung/Sonstiges","unklar"]
+           "Saege","Fahrzeug","Signal/Warnton","Sprache","Umgebung/Sonstiges","Unklar/Mischgeraeusch"]
 
 def read_csv(name):
     with open(os.path.join(VK, name), newline='', encoding='utf-8-sig') as f:
@@ -54,12 +54,13 @@ lines = [
     ("              (Sprache/Umgebung) — mit Audio-Link zum Gegenhören/Korrigieren.", 11, False),
     ("", 11, False),
     ("So arbeitest du damit:", 12, True),
-    ("1. 'Laermquelle_KI' = Klassifikation durch vortrainiertes Audio-Modell (PANNs/", 11, False),
-    ("   AudioSet). 'KI_AudioSet' zeigt die rohen Modell-Labels; 'KI_Konfidenz' die Stärke.", 11, False),
-    ("2. Clip anhören (WAV-Link), dann in 'Laermquelle_geprueft' die echte Quelle wählen", 11, False),
-    ("   (Dropdown). Niedrige Konfidenz und das Blatt 'Pruefen_NichtBaulaerm' zuerst prüfen.", 11, False),
-    ("3. Hinweis: Das anhaltende Dauerrumpeln des schweren Bohrgeräts erkennt AudioSet als", 11, False),
-    ("   'Train/Rail' → hier als 'Bohrgeraet/schweres Geraet' gewertet (Annahme, bitte gegenhören).", 11, False),
+    ("1. 'Laermquelle_Cluster' = lokale gemeinsame Bewertung akustisch ähnlicher WAVs", 11, False),
+    ("   ab 08.07.2026. Kandidat, Status und Konfidenz stehen in den Cluster-Spalten.", 11, False),
+    ("2. 'Unklar/Mischgeraeusch' bedeutet: keine belastbare automatische Zuordnung.", 11, False),
+    ("   Diese Cluster und niedrige Konfidenzen bitte zuerst gegenhören.", 11, False),
+    ("3. 'Train/Rail' wird als Verkehrsmerkmal behandelt, nicht als Bohrgerät. Ein", 11, False),
+    ("   Bohrgerät braucht Werkzeug-/Bohr- UND Motorbelege; Pegel/Dauer reichen nicht.", 11, False),
+    ("4. Clip anhören (WAV-Link), dann die echte Quelle in 'Laermquelle_geprueft' wählen.", 11, False),
     ("", 11, False),
     ("Hinweis: Die vollständige Verknüpfung ALLER Ereignisse (auch leise) liegt in", 11, False),
     ("master_index.csv. WAV-Dateien der lauten Ereignisse: Ordner relevante_wavs/.", 11, False),
@@ -119,9 +120,13 @@ def build_sheet(title, rows, fields, link_col, link_path_col, conf_col=None, dba
     # Spaltenbreiten
     for j, h in enumerate(fields, 1):
         w = {"scores": 40, "WAV": 26, "lautester_Clip": 26, "repr_Clip": 26,
-             "Quellen_Detail": 34, "Kriterium": 15, "Laermquelle_Auto": 14,
-             "Laermquelle_KI": 16, "KI_AudioSet": 42, "KI_Konfidenz": 11,
-             "Dauerbetrieb_Regel": 14, "Laermquelle_geprueft": 16}.get(h, max(9, min(16, len(h) + 3)))
+             "Quellen_Detail": 38, "Kriterium": 15, "Laermquelle_Auto": 20,
+             "Laermquelle_KI": 28, "KI_AudioSet": 46, "KI_Konfidenz": 11,
+             "Laermquelle_Cluster": 28, "Cluster_ID": 12,
+             "Cluster_Kandidat": 28, "Cluster_Konfidenz": 16,
+             "Cluster_Status": 14, "Cluster_AudioSet": 46,
+             "Cluster_Verifikation": 48, "Dauerbetrieb_Regel": 16,
+             "Laermquelle_geprueft": 28}.get(h, max(9, min(16, len(h) + 3)))
         ws.column_dimensions[get_column_letter(j)].width = w
     ws.row_dimensions[1].height = 30
     return ws
@@ -136,7 +141,7 @@ if dl:
 
 # ---------- Episoden ----------  (KI-Quelle je Episode aus den Ereignissen)
 from collections import defaultdict
-def src_of(r): return r.get("Laermquelle_KI") or r.get("Laermquelle_Auto", "")
+def src_of(r): return r.get("Laermquelle_geprueft") or r.get("Laermquelle_Cluster") or r.get("Laermquelle_KI") or r.get("Laermquelle_Auto", "")
 ep_ki = defaultdict(lambda: defaultdict(float))
 for r in ev:
     if r.get("Episode") and src_of(r):
@@ -151,27 +156,30 @@ build_sheet("Episoden", ep, ep_fields, link_col="lautester_Clip",
             link_path_col="lautester_Clip_Pfad", dba_col="dBA_Spitze")
 
 # ---------- Ereignisse ----------  (KI primär; Heuristik + Merkmale als Referenz)
-ev_fields = ["Datum","Uhrzeit","dBA","Amplitude","Dauerbetrieb_Regel","Laermquelle_KI","KI_Konfidenz",
+ev_fields = ["Datum","Uhrzeit","dBA","Amplitude","Dauerbetrieb_Regel","Laermquelle_Cluster",
+             "Cluster_ID","Cluster_Kandidat","Cluster_Konfidenz","Cluster_Status",
+             "Cluster_AudioSet","Cluster_Verifikation","Laermquelle_KI","KI_Konfidenz",
              "Laermquelle_geprueft","KI_AudioSet","Laermquelle_Auto","Episode","WAV",
              "centroid_Hz","dom_Hz","e_tief_<250","e_hoch_>2k","impuls_crest",
              "silbentakt","grundton","scores"]
 build_sheet("Ereignisse", ev, ev_fields, link_col="WAV", link_path_col="WAV_Pfad",
-            conf_col="KI_Konfidenz", dba_col="dBA")
+            conf_col="Cluster_Konfidenz", dba_col="dBA")
 
 # ---------- Pruefen_NichtBaulaerm ----------
 # Laute Ereignisse (≥75 dB), die das Modell NICHT als Baulärm einstuft (Sprache/
 # Umgebung) -> mit Audio-Link zum Gegenhören. Lauteste zuerst.
-NICHT_BAU = {"Sprache", "Umgebung/Sonstiges"}
+NICHT_BAU = {"Sprache", "Umgebung/Sonstiges", "Unklar/Mischgeraeusch"}
 def _dba(r):
     try: return float(r.get("dBA") or 0)
     except (ValueError, TypeError): return 0.0
-ev_nb = sorted([r for r in ev if (r.get("Laermquelle_KI") or "") in NICHT_BAU],
+ev_nb = sorted([r for r in ev if src_of(r) in NICHT_BAU],
                key=_dba, reverse=True)
-nb_fields = ["Datum","Uhrzeit","dBA","Dauerbetrieb_Regel","Laermquelle_KI","KI_Konfidenz",
-             "Laermquelle_geprueft","KI_AudioSet","WAV","Episode"]
+nb_fields = ["Datum","Uhrzeit","dBA","Dauerbetrieb_Regel","Laermquelle_Cluster",
+             "Cluster_Kandidat","Cluster_Konfidenz","Cluster_Status","Laermquelle_geprueft",
+             "Cluster_AudioSet","Laermquelle_KI","KI_Konfidenz","WAV","Episode"]
 if ev_nb:
     build_sheet("Pruefen_NichtBaulaerm", ev_nb, nb_fields, link_col="WAV",
-                link_path_col="WAV_Pfad", conf_col="KI_Konfidenz", dba_col="dBA")
+                link_path_col="WAV_Pfad", conf_col="Cluster_Konfidenz", dba_col="dBA")
 else:
     ws_nb = wb.create_sheet("Pruefen_NichtBaulaerm")
     ws_nb["A1"] = "Keine lauten Nicht-Baulärm-Ereignisse (Sprache/Umgebung) gefunden."

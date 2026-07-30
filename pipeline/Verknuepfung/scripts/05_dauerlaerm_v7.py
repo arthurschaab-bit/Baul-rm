@@ -93,6 +93,8 @@ def read_master_events() -> dict[str, list[dict[str, object]]]:
 def source_of_event(r: dict[str, str]) -> str:
     src = (r.get("Laermquelle_geprueft") or "").strip()
     if not src:
+        src = (r.get("Laermquelle_Cluster") or "").strip()
+    if not src:
         src = (r.get("Laermquelle_KI") or r.get("Laermquelle_Auto") or "").strip()
     return ALIAS.get(src, src)
 

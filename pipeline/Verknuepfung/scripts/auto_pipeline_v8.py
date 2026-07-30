@@ -282,6 +282,20 @@ def ensure_positions(days: list[str]) -> list[str]:
     ]
     removed = before - len(rows)
     existing = {r.get("Datum") for r in rows}
+    updated: list[str] = []
+    for row in rows:
+        position = (row.get("Position") or "").strip()
+        if position not in {"", "Position noch zu dokumentieren"}:
+            continue
+        row["Umgebung"] = "Aussen"
+        row["Position"] = "SO-Balkon"
+        hint = (row.get("Hinweis") or "").replace(
+            "Automatisch erkannt; Messposition bitte pruefen/ergaenzen.", ""
+        ).strip(" ;")
+        mandant = "SO-Balkon (Angabe Mandant 29.07.2026)."
+        row["Hinweis"] = f"{hint}; {mandant}" if hint else mandant
+        updated.append(row.get("Datum") or "")
+
     added: list[str] = []
     for day in days:
         if day in existing:
@@ -290,8 +304,8 @@ def ensure_positions(days: list[str]) -> list[str]:
             day,
             {
                 "Umgebung": "Aussen",
-                "Position": "Position noch zu dokumentieren",
-                "Hinweis": "Automatisch erkannt; Messposition bitte pruefen/ergaenzen.",
+                "Position": "SO-Balkon",
+                "Hinweis": "SO-Balkon (Standard fuer neue Aussenmessungen; Angabe Mandant 29.07.2026).",
             },
         )
         rows.append(
@@ -303,7 +317,7 @@ def ensure_positions(days: list[str]) -> list[str]:
             }
         )
         added.append(day)
-    if added:
+    if added or updated:
         path = VK / "messpositionen.csv"
         if path.exists():
             shutil.copy2(path, VK / f"messpositionen.backup_v8_{RUN_ID}.csv")
@@ -312,7 +326,7 @@ def ensure_positions(days: list[str]) -> list[str]:
             writer.writeheader()
             for row in rows:
                 writer.writerow({k: row.get(k, "") for k in fields})
-        detail = f"ergaenzt: {', '.join(added)}"
+        detail = f"ergaenzt: {', '.join(added) or '-'}; SO-Balkon gesetzt: {', '.join(updated) or '-'}"
         if removed:
             detail += f"; bereinigt: {removed}"
         RUN_LOG.append({"step": "messpositionen", "ok": True, "detail": detail})

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import errno
 import json
 import os
 import shutil
@@ -10,6 +11,9 @@ from typing import Iterable, Iterator, Sequence
 
 
 RAW_PATTERNS = ("20??-??-?? *.csv", "Laermprotokoll_*.zip")
+REPORT_IMAGE_DIRS = ("Fotos_Aufbau", "Lageplan")
+REPORT_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"}
+
 
 BOOTSTRAP_FILES = (
     "Verknuepfung/master_index.csv",
@@ -54,6 +58,11 @@ PUBLISH_GLOBS = (
     "Aufbereit_v2/Laermquellen/*.pdf",
     "Aufbereit_v2/Dauerlaermtabelle/*.pdf",
     "Aufbereit_v2/autolauf_v10/*.md",
+    "Aufbereit_v2/Local_Cluster_*/*.csv",
+    "Aufbereit_v2/Local_Cluster_*/*.json",
+    "Aufbereit_v2/OpenAI_Cluster_*/*.csv",
+    "Aufbereit_v2/OpenAI_Cluster_*/*.json",
+    "Aufbereit_v2/OpenAI_Cluster_*/api_cache/*.json",
 )
 
 FAILURE_LOG_GLOBS = ("Aufbereit_v2/autolauf_v10/*.md",)
@@ -141,6 +150,37 @@ def sync_tree(source_root: Path, destination_root: Path, *, dry_run: bool = Fals
                 dry_run=dry_run,
             )
         )
+    return stats
+
+def sync_report_images(
+    photo_root: Path,
+    destination_root: Path,
+    *,
+    dry_run: bool = False,
+) -> SyncStats:
+    """Spiegelt nur die kleinen Bildbestaende fuer Messaufbau und Lageplan."""
+    stats = SyncStats()
+    if not photo_root.is_dir():
+        stats.warnings.append(f"Bildordner nicht gefunden: {photo_root}")
+        return stats
+
+    for directory in REPORT_IMAGE_DIRS:
+        source_dir = photo_root / directory
+        if not source_dir.is_dir():
+            stats.warnings.append(f"Bildunterordner nicht gefunden: {source_dir}")
+            continue
+        for source in iter_tree_files(source_dir):
+            if source.suffix.lower() not in REPORT_IMAGE_EXTENSIONS:
+                continue
+            relative = Path(directory) / source.relative_to(source_dir)
+            stats.merge(
+                copy_if_changed(
+                    source,
+                    destination_root / relative,
+                    relative,
+                    dry_run=dry_run,
+                )
+            )
     return stats
 
 
@@ -274,6 +314,47 @@ def publish_outputs(
     return stats
 
 
+def _pid_is_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        process_query = 0x1000
+        still_active = 259
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.GetExitCodeProcess.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+        handle = kernel32.OpenProcess(process_query, False, pid)
+        if not handle:
+            return ctypes.get_last_error() == 5
+        try:
+            exit_code = wintypes.DWORD()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return True
+            return exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError as exc:
+        return exc.errno != errno.ESRCH
+    return True
+
+
 class RunLock:
     def __init__(self, lock_path: Path, stale_after_hours: int = 24) -> None:
         self.path = lock_path
@@ -284,13 +365,19 @@ class RunLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.path.exists():
             age = dt.datetime.now() - dt.datetime.fromtimestamp(self.path.stat().st_mtime)
-            if age <= self.stale_after:
-                details = self.path.read_text(encoding="utf-8", errors="replace").strip()
+            details = self.path.read_text(encoding="utf-8", errors="replace").strip()
+            try:
+                payload = json.loads(details)
+                pid = payload.get("pid") if isinstance(payload, dict) else None
+            except json.JSONDecodeError:
+                pid = None
+            active = isinstance(pid, int) and _pid_is_running(pid)
+            if active or (pid is None and age <= self.stale_after):
                 raise RuntimeError(
                     f"Ein anderer Lauf ist bereits aktiv ({self.path}; {details or 'keine Details'})."
                 )
             stale = self.path.with_name(
-                f"{self.path.name}.stale-{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+                f"{self.path.name}.stale-{dt.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
             )
             os.replace(self.path, stale)
 

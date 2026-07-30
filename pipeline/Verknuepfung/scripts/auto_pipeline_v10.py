@@ -32,7 +32,7 @@ STATE_PATH = OUTDIR / "automation_state_v10.json"
 FALLBACK_STATE_PATH = OUTDIR / "automation_state_v8.json"
 TEMPLATE_CONFIG_PATH = HERE / "pipeline_config_v10.json"
 CONFIG_PATH = OUTDIR / "pipeline_config_v10.runtime.json"
-VERSION = "v10"
+VERSION = "v10.3.0"
 RUN_ID = core.now_stamp()
 
 RUN_LOG = core.RUN_LOG
@@ -60,8 +60,8 @@ CORE_BACKUP_FILES = [
 OUTPUT_PREFIX = os.environ.get("BAUL_RM_OUTPUT_PREFIX", "Schallmessung")
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "version": "v10",
-    "version_str": "07_gesamtbericht v10 (2026-07) [gesamtbericht_lib_v4]",
+    "version": "v10.3.0",
+    "version_str": "07_gesamtbericht v10.3.0 (2026-07) [gesamtbericht_lib_v4]",
     "gesamtbericht_pdf": f"Gesamtbericht_{OUTPUT_PREFIX}_v10.pdf",
     "gesamtbericht_pdf_ohne_wav": f"Gesamtbericht_{OUTPUT_PREFIX}_v10_ohne_WAV.pdf",
     "manifest_csv": "Rohdaten_Manifest_v10.csv",
@@ -71,6 +71,21 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "relevant_script": "03_relevant_v7.py",
     "dauerlaerm_script": "05_dauerlaerm_v7.py",
     "gesamtbericht_script": "07_gesamtbericht_v10.py",
+    "local_clusters": {
+        "enabled": True,
+        "from": "2026-07-08",
+        "cluster_count": 120,
+        "min_confidence": 0.72,
+        "min_consensus": 0.60,
+        "min_similarity": 0.35,
+        "clap_model": "laion/clap-htsat-unfused",
+        "clap_batch_size": 8,
+    },
+    "openai_clusters": {
+        "enabled": False,
+        "from": "2026-07-08",
+        "model": "gpt-audio-1.5",
+    },
     "coverage_valid": 0.90,
     "coverage_window": 0.70,
     "daily_workers": 3,
@@ -194,6 +209,39 @@ def write_pipeline_config(discovery: dict[str, Any]) -> dict[str, Any]:
             for key, value in old.items():
                 if key not in {"report_days", "detected_inputs", "missing_nominal_zip_days"}:
                     config[key] = value
+    local_config = config.get("local_clusters", {})
+    local_config = dict(local_config) if isinstance(local_config, dict) else {}
+    local_config.update(
+        {
+            "enabled": os.environ.get("BAUL_RM_LOCAL_CLUSTER_ENABLED", "1") == "1",
+            "from": os.environ.get("BAUL_RM_LOCAL_CLUSTER_FROM", "2026-07-08"),
+            "cluster_count": int(os.environ.get("BAUL_RM_LOCAL_CLUSTER_COUNT", "120")),
+            "min_confidence": float(os.environ.get("BAUL_RM_LOCAL_CLUSTER_CONFIDENCE", "0.72")),
+            "min_consensus": float(os.environ.get("BAUL_RM_LOCAL_CLUSTER_CONSENSUS", "0.60")),
+            "min_similarity": float(os.environ.get("BAUL_RM_LOCAL_CLUSTER_SIMILARITY", "0.35")),
+            "clap_model": os.environ.get(
+                "BAUL_RM_LOCAL_CLAP_MODEL", "laion/clap-htsat-unfused"
+            ),
+            "clap_batch_size": int(
+                os.environ.get("BAUL_RM_LOCAL_CLAP_BATCH_SIZE", "8")
+            ),
+        }
+    )
+    config["local_clusters"] = local_config
+    cluster_config = config.get("openai_clusters", {})
+    cluster_config = dict(cluster_config) if isinstance(cluster_config, dict) else {}
+    cluster_config.update(
+        {
+            "enabled": os.environ.get("BAUL_RM_OPENAI_CLUSTER_ENABLED", "0") == "1",
+            "from": os.environ.get("BAUL_RM_OPENAI_CLUSTER_FROM", "2026-07-08"),
+            "model": os.environ.get("BAUL_RM_OPENAI_AUDIO_MODEL", "gpt-audio-1.5"),
+        }
+    )
+    config["openai_clusters"] = cluster_config
+    config["version"] = DEFAULT_CONFIG["version"]
+    config["version_str"] = DEFAULT_CONFIG["version_str"]
+    config["gesamtbericht_pdf"] = DEFAULT_CONFIG["gesamtbericht_pdf"]
+    config["gesamtbericht_pdf_ohne_wav"] = DEFAULT_CONFIG["gesamtbericht_pdf_ohne_wav"]
     config.update(
         {
             "updated_at": dt.datetime.now().isoformat(timespec="seconds"),
@@ -332,9 +380,12 @@ def mark_skipped(step: str, reason: str) -> None:
 def main() -> int:
     args = set(sys.argv[1:])
     force_full = "--full" in args
+    reports_only = "--reports-only" in args
     skip_audio = "--skip-audio" in args
     code_changed = "--code-changed" in args
     external_control_changed = "--control-changed" in args
+    force_openai = "--openai-clusters" in args
+    force_local = "--local-clusters" in args
 
     OUTDIR.mkdir(parents=True, exist_ok=True)
     LOGDIR.mkdir(parents=True, exist_ok=True)
@@ -354,10 +405,13 @@ def main() -> int:
 
     any_change = bool(
         force_full
+        or reports_only
         or code_changed
         or raw_changes
         or control_changes
         or pending_before
+        or force_openai
+        or force_local
     )
     print(f"Schallmessung Autolauf {VERSION} - {RUN_ID}")
     print(
@@ -384,9 +438,16 @@ def main() -> int:
     audio_changes = sorted(
         set(pending_before + audio_trigger_changes(discovery, raw_changes))
     )
-    audio_needed = bool(force_full or code_changed or audio_changes)
+    audio_needed = bool(force_full or audio_changes)
     data_needed = bool(force_full or code_changed or raw_changes)
-    reports_all = bool(force_full or code_changed or control_changes)
+    reports_all = bool(
+        force_full
+        or code_changed
+        or control_changes
+        or force_openai
+        or force_local
+        or reports_only
+    )
 
     outputs: dict[str, str] = {}
     pending_after: list[str] = pending_before
@@ -418,7 +479,92 @@ def main() -> int:
         else:
             mark_skipped("03_relevant", "keine Audio-relevante Aenderung")
 
-        downstream_needed = bool(data_needed or control_changes or audio_needed)
+        local_config = config.get("local_clusters", {})
+        local_enabled = bool(local_config.get("enabled", True))
+        local_from = str(local_config.get("from", "2026-07-08"))
+        local_package = OUTDIR / f"Local_Cluster_ab_{local_from.replace('-', '')}"
+        local_info = read_json(local_package / "laufinfo.json", {})
+        expected_local_config = {
+            "cluster_count": int(local_config.get("cluster_count", 120)),
+            "min_confidence": float(local_config.get("min_confidence", 0.72)),
+            "min_consensus": float(local_config.get("min_consensus", 0.60)),
+            "min_similarity": float(local_config.get("min_similarity", 0.35)),
+            "clap_model": str(
+                local_config.get("clap_model", "laion/clap-htsat-unfused")
+            ),
+        }
+        local_current = bool(
+            isinstance(local_info, dict)
+            and local_info.get("from") == local_from
+            and local_info.get("classifier_version") == "baustelle-clap-v2"
+            and local_info.get("configuration") == expected_local_config
+            and local_info.get("events_applied", False)
+        )
+        local_needed = (
+            local_enabled
+            and (
+                force_full
+                or code_changed
+                or audio_needed
+                or force_local
+                or not local_current
+            )
+        )
+        if local_needed:
+            core.run_step(
+                "09_local_clusters",
+                [
+                    str(HERE / "09_local_clusters.py"),
+                    "--from-date",
+                    local_from,
+                    "--k",
+                    str(local_config.get("cluster_count", 120)),
+                    "--min-confidence",
+                    str(local_config.get("min_confidence", 0.72)),
+                    "--min-consensus",
+                    str(local_config.get("min_consensus", 0.60)),
+                    "--min-similarity",
+                    str(local_config.get("min_similarity", 0.35)),
+                    "--clap-model",
+                    str(local_config.get("clap_model", "laion/clap-htsat-unfused")),
+                    "--batch-size",
+                    str(local_config.get("clap_batch_size", 8)),
+                ],
+            )
+        elif local_enabled:
+            mark_skipped("09_local_clusters", "lokales Clusterpaket bereits aktuell")
+
+        openai_config = config.get("openai_clusters", {})
+        openai_enabled = bool(openai_config.get("enabled", False))
+        openai_from = str(openai_config.get("from", "2026-07-08"))
+        openai_model = str(openai_config.get("model", "gpt-audio-1.5"))
+        openai_package = OUTDIR / f"OpenAI_Cluster_ab_{openai_from.replace('-', '')}"
+        openai_needed = (
+            openai_enabled
+            and (
+                force_full
+                or code_changed
+                or audio_needed
+                or force_openai
+                or not (openai_package / "laufinfo.json").exists()
+            )
+        )
+        if openai_needed:
+            core.run_step(
+                "09_openai_clusters",
+                [str(HERE / "09_openai_clusters.py"), "--from-date", openai_from, "--model", openai_model],
+                required=False,
+            )
+        elif openai_enabled:
+            mark_skipped("09_openai_clusters", "Clusterpaket bereits aktuell")
+
+        downstream_needed = bool(
+            data_needed
+            or control_changes
+            or audio_needed
+            or local_needed
+            or openai_needed
+        )
         if (VK / "Laermquellen_Verknuepfung_backup.xlsx").exists() and downstream_needed:
             core.run_step(
                 "10_import_geprueft",
@@ -433,6 +579,10 @@ def main() -> int:
             )
             core.run_step("08_tiefbohrer", [str(HERE / "08_tiefbohrer.py")])
             core.run_step("04_excel", [str(HERE / "04_excel.py")])
+        elif reports_only:
+            mark_skipped("05_dauerlaerm", "--reports-only")
+            mark_skipped("08_tiefbohrer", "--reports-only")
+            core.run_step("04_excel", [str(HERE / "04_excel.py")])
         else:
             mark_skipped("05_dauerlaerm", "Daten unveraendert")
             mark_skipped("08_tiefbohrer", "Daten unveraendert")
@@ -441,6 +591,9 @@ def main() -> int:
         days_to_run: list[str] = []
         for day in config["report_days"]:
             if not discovery["csv_by_day"].get(day):
+                continue
+            if reports_only:
+                mark_skipped(f"06_report_{day}", "--reports-only")
                 continue
             if reports_all or day in raw_days:
                 days_to_run.append(day)
@@ -493,6 +646,10 @@ def main() -> int:
             "Bautagebuch-Vorschlaege": rel(bautagebuch),
             "Konfiguration": rel(CONFIG_PATH),
         }
+        if openai_enabled:
+            outputs["OpenAI-Audio-Cluster"] = rel(openai_package)
+        if local_enabled:
+            outputs["Lokale Audio-Cluster"] = rel(local_package)
         save_state(discovery, outputs, pending_after)
         report = write_run_report(
             discovery, raw_changes, control_changes, outputs, backup_dir

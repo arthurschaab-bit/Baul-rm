@@ -93,6 +93,13 @@ VIDEO_DIR   = os.path.abspath(os.path.join(
 # Messaufbau-Fotos (v3 Punkt 4) — echter Ordner Fotos_Aufbau
 MESSAUFBAU_DIR = os.path.abspath(os.path.join(
     os.path.dirname(__file__), "..", "..", "..", "Fotos_Videos", "Fotos_Aufbau"))
+
+# Der Starter kann die selektiv lokal gespiegelten Berichtsbilder explizit setzen.
+_PHOTO_ROOT_OVERRIDE = os.environ.get("BAUL_RM_PHOTO_ROOT")
+if _PHOTO_ROOT_OVERRIDE:
+    LAGEPLAN_DIR = os.path.join(_PHOTO_ROOT_OVERRIDE, "Lageplan")
+    MESSAUFBAU_DIR = os.path.join(_PHOTO_ROOT_OVERRIDE, "Fotos_Aufbau")
+    VIDEO_DIR = os.path.join(_PHOTO_ROOT_OVERRIDE, "Schallmessvideos")
 # Foto-Zuordnung nach Aufbau-Regime (Dateibasis ohne .jpg) — Angabe Mandant
 try:
     _setup_groups = json.loads(os.environ.get("BAUL_RM_SETUP_GROUPS_JSON", "[]"))
@@ -704,7 +711,8 @@ def compute_day(day):
         h,m,s=map(int,r["Uhrzeit"].split(":")); return day0+pd.Timedelta(hours=h,minutes=m,seconds=s)
     def src_of(r):
         g=(r.get("Laermquelle_geprueft") or "").strip()
-        s=g if g else(r.get("Laermquelle_KI") or r.get("Laermquelle_Auto",""))
+        c=(r.get("Laermquelle_Cluster") or "").strip()
+        s=g if g else c if c else(r.get("Laermquelle_KI") or r.get("Laermquelle_Auto",""))
         return ALIAS.get(s,s)
     ev_bau=[r for r in ev if src_of(r) in BAU_RELEVANT]
 
@@ -1332,7 +1340,7 @@ def page_berechnung_kennwerte(pp):
     def norm(t,yp):
         fig.text(0.075,yp,t,fontsize=8.3,color='#111111',
                  bbox=dict(boxstyle='round,pad=0.22',fc='#F0F4F8',ec='#C0CCDD')); return yp-0.023
-    def body(t,yp): fig.text(0.075,yp,t,fontsize=8.3,color='#333333'); return yp-0.0165
+    def body(t,yp): fig.text(0.075,yp,t,fontsize=8.3,color='#333333'); return yp-0.015
 
     y=h1("LAeq — äquivalenter Dauerschallpegel",y)
     y=norm("LAeq = 10·log₁₀( Mittelwert(10^(L/10)) )  über den Bezugszeitraum (07–20 h bzw. Nachtsegment)",y)
@@ -1385,6 +1393,8 @@ def page_berechnung_kennwerte(pp):
     y=h1("Dauerbetrieb-Regel (Tiefbohrer-Erkennung, separat von den Phasen oben)",y)
     y=body("Gleitendes 30-s-Mittel >70 dB(A) bei gleitender Standardabweichung <4 dB über ≥60 s "
            "(kurze Unterschreitungen ≤15 s überbrückt) = Dauerbetrieb schweres Gerät.",y)
+    y=body("Diese automatische Pegel-/Dauerregel gilt nur vom 08.06. bis einschliesslich 19.07.2026; "
+           "ab 20.07.2026 wird daraus keine automatische Tiefbohrer-Zuordnung mehr abgeleitet.",y)
     y-=0.006
 
     y=h1("Nachtsegmente (vor 07:00 / ab 20:00 Uhr)",y)
@@ -1399,6 +1409,8 @@ def page_berechnung_kennwerte(pp):
         y=h1("Beweisstufen der Quellenzuordnung",y)
         y=body("Dreistufig, absteigende Rangfolge: manuell geprüft (Gold-Standard) > clusterbasiert bestätigt "
                "(dokumentierte Stichproben) > KI-vorläufig (automatische AudioSet-Zuordnung).",y)
+        y=body("Die OpenAI-Audio-Clusterstufe ist ebenfalls automatisch und keine manuelle Einzelpruefung; "
+               "bei Mischgeraeuschen oder geringer Sicherheit bleibt die Zuordnung offen.",y)
     y-=0.006
 
     y=h1("Messunsicherheit",y)

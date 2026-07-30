@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -15,6 +16,7 @@ from baul_rm.sync import (
     bootstrap_files,
     publish_outputs,
     sync_raw_files,
+    sync_report_images,
 )
 
 
@@ -80,6 +82,21 @@ class SyncTests(unittest.TestCase):
         self.assertTrue((self.cloud / "Aufbereit_v2" / "report.pdf").exists())
         self.assertFalse((self.cloud / raw.name).exists())
 
+    def test_report_image_sync_copies_only_required_image_folders(self) -> None:
+        photos = self.root / "Fotos_Videos"
+        write_file(photos / "Fotos_Aufbau" / "setup.jpg", b"jpg", 1_700_000_000_000_000_000)
+        write_file(photos / "Fotos_Aufbau" / "video.mp4", b"video", 1_700_000_000_000_000_000)
+        write_file(photos / "Lageplan" / "lage.png", b"png", 1_700_000_000_000_000_000)
+        write_file(photos / "Schallmessvideos" / "large.mp4", b"large", 1_700_000_000_000_000_000)
+
+        result = sync_report_images(photos, self.runtime / "Fotos_Videos")
+
+        self.assertEqual(result.copied, 2)
+        self.assertTrue((self.runtime / "Fotos_Videos" / "Fotos_Aufbau" / "setup.jpg").is_file())
+        self.assertTrue((self.runtime / "Fotos_Videos" / "Lageplan" / "lage.png").is_file())
+        self.assertFalse((self.runtime / "Fotos_Videos" / "Fotos_Aufbau" / "video.mp4").exists())
+        self.assertFalse((self.runtime / "Fotos_Videos" / "Schallmessvideos").exists())
+
     def test_run_lock_blocks_a_second_run(self) -> None:
         lock_path = self.root / "locks" / "run.lock"
         with RunLock(lock_path):
@@ -87,6 +104,17 @@ class SyncTests(unittest.TestCase):
                 with RunLock(lock_path):
                     pass
         self.assertFalse(lock_path.exists())
+
+    def test_run_lock_recovers_dead_pid_immediately(self) -> None:
+        lock_path = self.root / "locks" / "run.lock"
+        lock_path.parent.mkdir(parents=True)
+        lock_path.write_text(json.dumps({"pid": 2147483647}), encoding="utf-8")
+        with RunLock(lock_path):
+            self.assertTrue(lock_path.exists())
+            stale = list(lock_path.parent.glob("run.lock.stale-*"))
+            self.assertEqual(len(stale), 1)
+        self.assertFalse(lock_path.exists())
+
 
 
 if __name__ == "__main__":

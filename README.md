@@ -66,14 +66,63 @@ unter `.baul-rm/quarantine/` im Cache abgelegt.
 - private Berichtsdaten liegen nur in der ignorierten lokalen Konfiguration
 - Messdaten und große Ergebnis-Caches bleiben durch `.gitignore` aus Git heraus
 
+## Neu in v10.1
+
+- PANNs-Inferenz verarbeitet gleich geformte WAV-Clips gebuendelt statt einzeln.
+- Der Audio-Cache wird konsistent geprueft, atomar gespeichert und regelmaessig gesichert.
+- Doppelte WAV-Verweise werden vor der Inferenz entfernt.
+- Verwaiste Lauf-Sperren mit nicht mehr existierendem Prozess werden sofort freigegeben.
+- Mehrfach fehlcodierte UTF-8-Berichtstexte werden beim Start sicher normalisiert.
+- Breitere KI- und Pruefspalten verbessern die Lesbarkeit der Excel-Arbeitsmappe.
+- Tagesbericht-Infoboxen werden ohne Ueberdeckung kontrolliert umgebrochen.
+
+
+## Neu in v10.2.1
+
+- Die reine Pegel-/Dauerregel erzeugt ab 20.07.2026 keine automatische
+  Tiefbohrer-Zuordnung mehr.
+- Noch nicht dokumentierte Aussen-Aufnahmeorte werden als `SO-Balkon` gefuehrt;
+  bereits dokumentierte Innen- und Wechselpositionen bleiben unveraendert.
+- Lageplan- und Messaufbau-Bilder werden selektiv in den lokalen Cache kopiert.
+  Videoarchive bleiben im Cloud-Bestand und werden nicht mitgespiegelt.
+- Eine lokale PANNs-Uebersegmentierung bildet ab einschliesslich 08.07.2026
+  akustische Cluster. `gpt-audio-1.5` beurteilt in bis zu zwei Runden nur kurze
+  repraesentative WAV-Ausschnitte. Mischungen aus Baustellen- und allgemeinen
+  Aussengeraeuschen werden ausdruecklich beruecksichtigt.
+- API-Antworten werden je Cluster gecacht. Ohne `OPENAI_API_KEY` wird das
+  Clusterpaket vorbereitet, aber es werden keine Daten an OpenAI gesendet.
+
+## Neu in v10.3.0
+
+- PANNs bildet lokal die akustischen Cluster. CLAP hoert anschliessend nur drei
+  Vertreter je Cluster und ordnet sie per Zero-Shot-Audiovergleich den
+  Baustellen- und Umgebungskategorien zu. Es gibt keine API-Aufrufe und keine
+  Kosten pro WAV.
+- Verarbeitet werden ausschliesslich Ereignisse ab einschliesslich 08.07.2026.
+- `Train`/`Rail` wird nicht mehr als Bohrgeraet umgedeutet. CLAP vergleicht
+  stattdessen ausdrueckliche Beschreibungen von Bagger, Tief-/Fundamentbohrung,
+  Motor, Werkzeug, Verkehr, Signalen, Sprache und Umgebung. Pegel und Dauer sind
+  keine Erkennungsmerkmale.
+- Homogene Cluster werden automatisch uebernommen. Uneindeutige Mischcluster
+  erhalten `Unklar/Mischgeraeusch` und erscheinen gebuendelt in
+  `Aufbereit_v2/Local_Cluster_ab_20260708/pruefliste.csv`.
+- Manuell gepruefte Laermquellen haben weiterhin Vorrang. Die OpenAI-Audiostufe
+  bleibt optional vorhanden, ist in der Standardkonfiguration aber deaktiviert.
+
+Ein API-Schluessel ist fuer die lokale Erkennung nicht erforderlich. Das
+Startdatum und die Pruefschwellen stehen im Abschnitt `local_audio` der lokalen
+Konfiguration.
+
 ## Abhängigkeiten
 
 ```powershell
 py -3 -m pip install -r requirements.txt
 ```
 
-`panns-inference` wird nur benötigt, wenn neue WAV-Ereignisse klassifiziert
-werden. Das zugehörige Modell liegt wie bisher außerhalb des Repositorys.
+Beim ersten lokalen Clusterlauf wird `laion/clap-htsat-unfused` einmalig
+heruntergeladen (rund 618 MB) und danach aus dem lokalen Modellcache verwendet.
+PANNs-Wahrscheinlichkeiten und CLAP-Ergebnisse der Clustervertreter werden
+separat zwischengespeichert, sodass Folgeläufe nur neue Vertreter berechnen.
 
 ## Tests
 

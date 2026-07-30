@@ -1,6 +1,6 @@
 {
-    "version":  "v10",
-    "version_str":  "07_gesamtbericht v10 (2026-07) [gesamtbericht_lib_v4]",
+    "version":  "v10.3.0",
+    "version_str":  "07_gesamtbericht v10.3.0 (2026-07) [gesamtbericht_lib_v4]",
     "gesamtbericht_pdf":  "Gesamtbericht_Schallmessung_v10.pdf",
     "gesamtbericht_pdf_ohne_wav":  "Gesamtbericht_Schallmessung_v10_ohne_WAV.pdf",
     "manifest_csv":  "Rohdaten_Manifest_v10.csv",
@@ -10,6 +10,21 @@
     "relevant_script":  "03_relevant_v7.py",
     "dauerlaerm_script":  "05_dauerlaerm_v7.py",
     "gesamtbericht_script":  "07_gesamtbericht_v10.py",
+    "local_clusters":  {
+                            "enabled":  true,
+                            "from":  "2026-07-08",
+                            "cluster_count":  120,
+                            "min_confidence":  0.72,
+                            "min_consensus":  0.60,
+                            "min_similarity":  0.35,
+                            "clap_model":  "laion/clap-htsat-unfused",
+                            "clap_batch_size":  8
+                        },
+    "openai_clusters":  {
+                             "enabled":  false,
+                             "from":  "2026-07-08",
+                             "model":  "gpt-audio-1.5"
+                         },
     "coverage_valid":  0.9,
     "coverage_window":  0.7,
     "daily_workers":  3,

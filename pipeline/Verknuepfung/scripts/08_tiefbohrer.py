@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 08_tiefbohrer.py
-Wendet die Tiefbohrer-Regel (tiefbohrer.py: >65 dB, >1 min, wenig Schwankung, ab
-08.06.) auf alle Tage an. Ergebnis:
+Wendet die Tiefbohrer-Regel (tiefbohrer.py: >70 dB, >1 min, wenig Schwankung)
+nur vom 08.06. bis einschliesslich 19.07.2026 an. Ab 20.07. wird aus einem
+laengeren hohen Pegel keine automatische Tiefbohrer-Zuordnung mehr abgeleitet.
+Ergebnis:
   - Verknuepfung/tiefbohrer_spans.csv         (erkannte Tiefbohrer-Zeitfenster)
   - Spalte 'Dauerbetrieb_Regel' (Ja/Nein) in relevante_ereignisse.csv und dauerlaerm.csv
 """

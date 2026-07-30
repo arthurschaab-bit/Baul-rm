@@ -18,6 +18,7 @@ from .sync import (
     publish_outputs,
     sync_control_files,
     sync_raw_files,
+    sync_report_images,
     sync_tree,
 )
 
@@ -39,6 +40,38 @@ def _read_config(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"Konfiguration muss ein JSON-Objekt sein: {path}")
     return data
+
+_MOJIBAKE_MARKERS = ("\u00c3", "\u00c2", "\u00e2")
+
+
+def _repair_text_tree(value: Any) -> Any:
+    """Repair common UTF-8/Windows-1252 mojibake in nested config values."""
+    if isinstance(value, dict):
+        return {key: _repair_text_tree(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_repair_text_tree(item) for item in value]
+    if not isinstance(value, str) or not any(
+        marker in value for marker in _MOJIBAKE_MARKERS
+    ):
+        return value
+
+    text = value
+    for _ in range(3):
+        old_score = sum(text.count(marker) for marker in _MOJIBAKE_MARKERS)
+        improved = False
+        for encoding in ("cp1252", "latin-1"):
+            try:
+                candidate = text.encode(encoding).decode("utf-8")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                continue
+            new_score = sum(candidate.count(marker) for marker in _MOJIBAKE_MARKERS)
+            if new_score < old_score:
+                text = candidate
+                improved = True
+                break
+        if not improved:
+            break
+    return text
 
 
 def _fmt_bytes(value: int) -> str:
@@ -88,6 +121,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cache-root", help="Persistenter lokaler Arbeitsordner")
     parser.add_argument("--full", action="store_true", help="Alle Auswertungsschritte erzwingen")
     parser.add_argument(
+        "--reports-only",
+        action="store_true",
+        help="Nur Excel-Uebersicht und Gesamtberichte neu erzeugen",
+    )
+    parser.add_argument(
         "--skip-audio",
         action="store_true",
         help="WAV-Auswertung verschieben; sie bleibt fuer den naechsten Lauf vorgemerkt",
@@ -128,14 +166,42 @@ def main(argv: list[str] | None = None) -> int:
     else:
         raise ValueError("cache_root darf nicht innerhalb des Cloud-Ordners liegen.")
 
-    report = config.get("report", {})
+    report = _repair_text_tree(config.get("report", {}))
     if not isinstance(report, dict):
         raise ValueError("report muss in der Konfiguration ein JSON-Objekt sein.")
+    local_audio = config.get("local_audio", {})
+    if not isinstance(local_audio, dict):
+        raise ValueError("local_audio muss in der Konfiguration ein JSON-Objekt sein.")
+    local_enabled = bool(local_audio.get("enabled", True))
+    local_from = str(local_audio.get("from", "2026-07-08"))
+    local_clusters = max(2, int(local_audio.get("clusters", 120)))
+    local_min_confidence = float(local_audio.get("min_confidence", 0.72))
+    local_min_consensus = float(local_audio.get("min_consensus", 0.60))
+    local_min_similarity = float(local_audio.get("min_similarity", 0.35))
+    local_clap_model = str(
+        local_audio.get("clap_model", "laion/clap-htsat-unfused")
+    )
+    local_clap_batch_size = max(1, int(local_audio.get("clap_batch_size", 8)))
+
+    openai_audio = config.get("openai_audio", {})
+    if not isinstance(openai_audio, dict):
+        raise ValueError("openai_audio muss in der Konfiguration ein JSON-Objekt sein.")
+    openai_enabled = bool(openai_audio.get("enabled", False))
+    openai_from = str(openai_audio.get("from", "2026-07-08"))
+    openai_model = str(openai_audio.get("model", "gpt-audio-1.5"))
+
     output_prefix = str(report.get("output_prefix", "Schallmessung"))
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", output_prefix):
         raise ValueError(
             "report.output_prefix darf nur Buchstaben, Zahlen, Punkt, Minus und Unterstrich enthalten."
         )
+    photo_value = report.get("photo_root")
+    photo_root = (
+        _expand_path(str(photo_value), config_path.parent)
+        if photo_value
+        else (cloud_root.parent / "Fotos_Videos").resolve()
+    )
+    photo_target = runtime_root / "Fotos_Videos"
     report_env = {
         "BAUL_RM_ADDRESS": str(report.get("address", "Messadresse")),
         "BAUL_RM_TENANT": str(report.get("tenant", "Auftraggeber")),
@@ -145,8 +211,19 @@ def main(argv: list[str] | None = None) -> int:
             report.get("setup_groups", []), ensure_ascii=False
         ),
         "BAUL_RM_OUTPUT_PREFIX": output_prefix,
+        "BAUL_RM_PHOTO_ROOT": str(photo_target),
+        "BAUL_RM_LOCAL_CLUSTER_ENABLED": "1" if local_enabled else "0",
+        "BAUL_RM_LOCAL_CLUSTER_FROM": local_from,
+        "BAUL_RM_LOCAL_CLUSTER_COUNT": str(local_clusters),
+        "BAUL_RM_LOCAL_CLUSTER_CONFIDENCE": str(local_min_confidence),
+        "BAUL_RM_LOCAL_CLUSTER_CONSENSUS": str(local_min_consensus),
+        "BAUL_RM_LOCAL_CLUSTER_SIMILARITY": str(local_min_similarity),
+        "BAUL_RM_LOCAL_CLAP_MODEL": local_clap_model,
+        "BAUL_RM_LOCAL_CLAP_BATCH_SIZE": str(local_clap_batch_size),
+        "BAUL_RM_OPENAI_CLUSTER_ENABLED": "1" if openai_enabled else "0",
+        "BAUL_RM_OPENAI_CLUSTER_FROM": openai_from,
+        "BAUL_RM_OPENAI_AUDIO_MODEL": openai_model,
     }
-
     print(f"Baul-rm v{__version__}")
     print(f"Cloud: {cloud_root}")
     print(f"Lokal: {runtime_root}")
@@ -173,10 +250,16 @@ def main(argv: list[str] | None = None) -> int:
                 prune=not args.no_prune,
                 dry_run=True,
             )
+            preview_images = sync_report_images(
+                photo_root,
+                photo_target,
+                dry_run=True,
+            )
             required = (
                 preview_bootstrap.bytes_copied
                 + preview_control.bytes_copied
                 + preview_raw.bytes_copied
+                + preview_images.bytes_copied
             )
             _check_disk_space(
                 cache_root,
@@ -187,6 +270,13 @@ def main(argv: list[str] | None = None) -> int:
         code_stats = sync_tree(pipeline_source, runtime_root, dry_run=args.dry_run)
         _print_stats("Code", code_stats)
 
+
+        image_stats = sync_report_images(
+            photo_root,
+            photo_target,
+            dry_run=args.dry_run,
+        )
+        _print_stats("Berichtsbilder", image_stats)
         bootstrap_stats = bootstrap_files(
             cloud_root, runtime_root, dry_run=args.dry_run
         )
@@ -211,8 +301,50 @@ def main(argv: list[str] | None = None) -> int:
 
         pipeline = runtime_root / "Verknuepfung" / "scripts" / "auto_pipeline_v10.py"
         command = [sys.executable, str(pipeline)]
+        local_pending = False
+        if local_enabled:
+            local_info_path = (
+                runtime_root
+                / "Aufbereit_v2"
+                / f"Local_Cluster_ab_{local_from.replace('-', '')}"
+                / "laufinfo.json"
+            )
+            info = _read_config(local_info_path) if local_info_path.is_file() else {}
+            expected = {
+                "cluster_count": local_clusters,
+                "min_confidence": local_min_confidence,
+                "min_consensus": local_min_consensus,
+                "min_similarity": local_min_similarity,
+                "clap_model": local_clap_model,
+            }
+            local_pending = (
+                not info
+                or info.get("from") != local_from
+                or info.get("classifier_version") != "baustelle-clap-v2"
+                or info.get("configuration") != expected
+                or not info.get("events_applied", False)
+            )
+
+        openai_pending = False
+        if openai_enabled:
+            runinfo = (
+                runtime_root
+                / "Aufbereit_v2"
+                / f"OpenAI_Cluster_ab_{openai_from.replace('-', '')}"
+                / "laufinfo.json"
+            )
+            info = _read_config(runinfo) if runinfo.is_file() else {}
+            openai_pending = (
+                not info
+                or info.get("model") != openai_model
+                or info.get("from") != openai_from
+                or (bool(os.environ.get("OPENAI_API_KEY")) and not info.get("api_executed"))
+            )
+
         if args.full:
             command.append("--full")
+        if args.reports_only:
+            command.append("--reports-only")
         if args.skip_audio:
             command.append("--skip-audio")
         if code_stats.copied and runtime_preexisting:
@@ -221,6 +353,10 @@ def main(argv: list[str] | None = None) -> int:
             command.append("--control-changed")
 
         print("\nLokale Auswertung startet ...", flush=True)
+        if local_pending:
+            command.append("--local-clusters")
+        if openai_pending:
+            command.append("--openai-clusters")
         proc = subprocess.run(
             command,
             cwd=runtime_root,
