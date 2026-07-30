@@ -3,9 +3,10 @@
 
 Das Modul arbeitet ausschliesslich mit den bereits berechneten 527
 AudioSet-Wahrscheinlichkeiten des PANNs-Modells. Es verwendet weder dB(A)-Pegel
-noch Ereignisdauer als Hinweis auf einen Tiefbohrer. Insbesondere werden
-Train/Rail-Ausgaben entsprechend ihrer AudioSet-Bedeutung dem Verkehr
-zugeordnet und nicht als Bohrgeraet umgedeutet.
+noch Ereignisdauer als Hinweis auf einen Tiefbohrer. Da sich kein Zug in der
+Umgebung befindet, werden Train/Rail-Ausgaben als akustische Fehlaehnlichkeit
+schwerer Baustellenmaschinen behandelt. Sie sind weder Verkehrs- noch
+Tiefbohrernachweis.
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 
-CLASSIFIER_VERSION = "baustelle-clap-v2"
+CLASSIFIER_VERSION = "baustelle-clap-v3"
 UNCLEAR = "Unklar/Mischgeraeusch"
 
 # Gewichtete AudioSet-Merkmale. Ein Maximum plus kleine Beitraege weiterer
@@ -43,6 +44,18 @@ CATEGORY_LABELS: dict[str, dict[str, float]] = {
         "Engine knocking": 0.90,
         "Accelerating, revving, vroom": 0.85,
     },
+    "Schweres Baugeraet/sonstige Maschine": {
+        # Kontextkorrektur: Am Messort gibt es keinen Zug. Diese AudioSet-
+        # Rohlabels beschreiben hier nur eine akustische Aehnlichkeit zu
+        # rollenden, rotierenden oder metallisch quietschenden Baumaschinen.
+        "Rail transport": 1.00,
+        "Train": 1.00,
+        "Railroad car, train wagon": 1.00,
+        "Subway, metro, underground": 0.95,
+        "Train wheels squealing": 0.95,
+        "Squeal": 0.55,
+        "Pump (liquid)": 0.75,
+    },
     "Fahrzeug": {
         "Vehicle": 0.85,
         "Motor vehicle (road)": 1.10,
@@ -53,12 +66,6 @@ CATEGORY_LABELS: dict[str, dict[str, float]] = {
         "Car passing by": 1.05,
         "Air brake": 0.95,
         "Tire squeal": 0.90,
-        "Rail transport": 1.00,
-        "Train": 1.00,
-        "Railroad car, train wagon": 1.00,
-        "Subway, metro, underground": 1.00,
-        "Train wheels squealing": 0.95,
-        "Squeal": 0.55,
     },
     "Signal/Warnton": {
         "Reversing beeps": 1.20,
@@ -111,6 +118,7 @@ CATEGORY_LABELS: dict[str, dict[str, float]] = {
 
 CATEGORIES = [
     "Bohrgeraet/schweres Geraet",
+    "Schweres Baugeraet/sonstige Maschine",
     "Motor/Diesel",
     "Schlagen/Bohren",
     "Saege",

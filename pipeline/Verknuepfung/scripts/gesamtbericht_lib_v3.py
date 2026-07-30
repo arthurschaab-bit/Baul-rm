@@ -168,6 +168,7 @@ C_WARN   = "#8B1A00"   # Warnung
 SRC_COLOR = {
     "Bagger":"#D4860A",
     "Bohrgeraet/schweres Geraet":"#7B4030",
+    "Schweres Baugeraet/sonstige Maschine":"#4E6E81",
     "Motor/Diesel":"#8B8B00",
     "Schlagen/Bohren":"#A01010",
     "Saege":"#C04800",
@@ -178,13 +179,14 @@ SRC_COLOR = {
 }
 NONBAU_COLOR = "#5A8A80"
 NODATA_COLOR = "#E0E0E0"
-BAU_RELEVANT = ["Bagger","Bohrgeraet/schweres Geraet","Motor/Diesel",
+BAU_RELEVANT = ["Bagger","Bohrgeraet/schweres Geraet","Schweres Baugeraet/sonstige Maschine","Motor/Diesel",
                 "Schlagen/Bohren","Saege","Fahrzeug","Signal/Warnton"]
 ALIAS = {"Tiefbohrer":"Bohrgeraet/schweres Geraet"}
 
 DISP = {
     "Bagger":"Bagger",
     "Bohrgeraet/schweres Geraet":"Tiefbohrer/Schwerlast",
+    "Schweres Baugeraet/sonstige Maschine":"Schweres Baugeraet/sonst.",
     "Motor/Diesel":"Motor/Diesel",
     "Schlagen/Bohren":"Schlagen/Bohren",
     "Saege":"Säge",
@@ -196,6 +198,7 @@ DISP = {
 DISP_S = {  # Kurzform für Mono-Tabellen
     "Bagger":"Bagger            ",
     "Bohrgeraet/schweres Geraet":"Tiefbohrer/Schwl. ",
+    "Schweres Baugeraet/sonstige Maschine":"Schw. Baugeraet    ",
     "Motor/Diesel":"Motor/Diesel      ",
     "Schlagen/Bohren":"Schlagen/Bohren   ",
     "Saege":"Säge              ",

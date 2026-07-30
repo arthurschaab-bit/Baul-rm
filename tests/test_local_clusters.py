@@ -16,6 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from local_clap import aggregate_scores  # noqa: E402
 from local_cluster_model import classify_cluster  # noqa: E402
+from panns_classify import CAT_MAP  # noqa: E402
 
 SCRIPT = SCRIPTS / "09_local_clusters.py"
 spec = importlib.util.spec_from_file_location("local_clusters", SCRIPT)
@@ -43,9 +44,38 @@ def matrix(**columns: float) -> np.ndarray:
 
 
 class LocalClusterModelTests(unittest.TestCase):
-    def test_train_and_vehicle_are_not_called_drilling_rig(self) -> None:
+    def test_rail_labels_never_mean_train_or_drilling_rig(self) -> None:
+        rail_labels = [
+            "Train",
+            "Rail transport",
+            "Railroad car, train wagon",
+            "Subway, metro, underground",
+            "Train wheels squealing",
+        ]
+
+        self.assertTrue(
+            all(
+                CAT_MAP[label] == "Schweres Baugeraet/sonstige Maschine"
+                for label in rail_labels
+            )
+        )
+        self.assertEqual("Fahrzeug", CAT_MAP["Truck"])
+
+    def test_train_is_contextualised_as_construction_machine(self) -> None:
         result = classify_cluster(
-            matrix(Vehicle=0.70, Train=0.35),
+            matrix(Vehicle=0.35, Train=0.70),
+            LABELS,
+            np.full(8, 0.80, dtype=np.float32),
+            min_confidence=0.60,
+        )
+
+        self.assertEqual("Schweres Baugeraet/sonstige Maschine", result["candidate"])
+        self.assertEqual("Schweres Baugeraet/sonstige Maschine", result["label"])
+        self.assertEqual("automatisch", result["status"])
+
+    def test_road_vehicle_stays_vehicle(self) -> None:
+        result = classify_cluster(
+            matrix(Vehicle=0.70, Train=0.05),
             LABELS,
             np.full(8, 0.80, dtype=np.float32),
             min_confidence=0.60,

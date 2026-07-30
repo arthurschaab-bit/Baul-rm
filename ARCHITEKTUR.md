@@ -45,3 +45,9 @@ homogene und sichere Cluster erhalten automatisch eine Laermquelle; alle anderen
 werden als Mischgeraeusch markiert und in einer kleinen Pruefliste
 zusammengefasst. Die Stufe sendet keine WAVs oder Metadaten an einen externen
 Dienst.
+
+Am Messort gibt es keinen Bahnverkehr. AudioSet-Rohlabels wie `Train`, `Rail`
+oder `Subway` werden deshalb als akustische Fehlaehnlichkeit zu rollenden,
+rotierenden oder metallisch quietschenden Baustellenmaschinen behandelt. Sie
+koennen die allgemeine Kategorie `Schweres Baugeraet/sonstige Maschine`
+unterstuetzen, sind aber weder Zugnachweis noch Tiefbohrer-Nachweis.
