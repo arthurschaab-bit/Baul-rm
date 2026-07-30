@@ -35,3 +35,13 @@ Hash-Caches weiter funktionieren.
 - Code und Konfiguration: Git
 - Berichte, Tabellen und Statusdateien: Rücktransfer zu Google Drive
 - Entfernte Rohdaten: lokale Quarantäne statt endgültiger Löschung
+## Lokale Audioerkennung
+
+Der vorhandene PANNs-Cache enthaelt je WAV 527 AudioSet-Merkmale. Ab 08.07.2026
+werden daraus akustisch aehnliche Cluster gebildet. Das lokale CLAP-Modell hoert
+nur drei Vertreter je Cluster und vergleicht sie mit ausdruecklichen
+Beschreibungen typischer Baustellen- und Aussengeraeusche. Nur hinreichend
+homogene und sichere Cluster erhalten automatisch eine Laermquelle; alle anderen
+werden als Mischgeraeusch markiert und in einer kleinen Pruefliste
+zusammengefasst. Die Stufe sendet keine WAVs oder Metadaten an einen externen
+Dienst.

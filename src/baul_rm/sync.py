@@ -58,6 +58,8 @@ PUBLISH_GLOBS = (
     "Aufbereit_v2/Laermquellen/*.pdf",
     "Aufbereit_v2/Dauerlaermtabelle/*.pdf",
     "Aufbereit_v2/autolauf_v10/*.md",
+    "Aufbereit_v2/Local_Cluster_*/*.csv",
+    "Aufbereit_v2/Local_Cluster_*/*.json",
     "Aufbereit_v2/OpenAI_Cluster_*/*.csv",
     "Aufbereit_v2/OpenAI_Cluster_*/*.json",
     "Aufbereit_v2/OpenAI_Cluster_*/api_cache/*.json",

@@ -92,17 +92,37 @@ unter `.baul-rm/quarantine/` im Cache abgelegt.
 - API-Antworten werden je Cluster gecacht. Ohne `OPENAI_API_KEY` wird das
   Clusterpaket vorbereitet, aber es werden keine Daten an OpenAI gesendet.
 
-Der API-Schluessel wird nur als lokale Umgebungsvariable erwartet und gehoert
-nicht in `settings.local.json` oder Git. Das Startdatum wird dort separat als
-`openai_audio.from` konfiguriert.
+## Neu in v10.3.0
+
+- PANNs bildet lokal die akustischen Cluster. CLAP hoert anschliessend nur drei
+  Vertreter je Cluster und ordnet sie per Zero-Shot-Audiovergleich den
+  Baustellen- und Umgebungskategorien zu. Es gibt keine API-Aufrufe und keine
+  Kosten pro WAV.
+- Verarbeitet werden ausschliesslich Ereignisse ab einschliesslich 08.07.2026.
+- `Train`/`Rail` wird nicht mehr als Bohrgeraet umgedeutet. CLAP vergleicht
+  stattdessen ausdrueckliche Beschreibungen von Bagger, Tief-/Fundamentbohrung,
+  Motor, Werkzeug, Verkehr, Signalen, Sprache und Umgebung. Pegel und Dauer sind
+  keine Erkennungsmerkmale.
+- Homogene Cluster werden automatisch uebernommen. Uneindeutige Mischcluster
+  erhalten `Unklar/Mischgeraeusch` und erscheinen gebuendelt in
+  `Aufbereit_v2/Local_Cluster_ab_20260708/pruefliste.csv`.
+- Manuell gepruefte Laermquellen haben weiterhin Vorrang. Die OpenAI-Audiostufe
+  bleibt optional vorhanden, ist in der Standardkonfiguration aber deaktiviert.
+
+Ein API-Schluessel ist fuer die lokale Erkennung nicht erforderlich. Das
+Startdatum und die Pruefschwellen stehen im Abschnitt `local_audio` der lokalen
+Konfiguration.
+
 ## Abhängigkeiten
 
 ```powershell
 py -3 -m pip install -r requirements.txt
 ```
 
-`panns-inference` wird nur benötigt, wenn neue WAV-Ereignisse klassifiziert
-werden. Das zugehörige Modell liegt wie bisher außerhalb des Repositorys.
+Beim ersten lokalen Clusterlauf wird `laion/clap-htsat-unfused` einmalig
+heruntergeladen (rund 618 MB) und danach aus dem lokalen Modellcache verwendet.
+PANNs-Wahrscheinlichkeiten und CLAP-Ergebnisse der Clustervertreter werden
+separat zwischengespeichert, sodass Folgeläufe nur neue Vertreter berechnen.
 
 ## Tests
 

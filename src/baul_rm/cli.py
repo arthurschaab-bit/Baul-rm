@@ -169,6 +169,20 @@ def main(argv: list[str] | None = None) -> int:
     report = _repair_text_tree(config.get("report", {}))
     if not isinstance(report, dict):
         raise ValueError("report muss in der Konfiguration ein JSON-Objekt sein.")
+    local_audio = config.get("local_audio", {})
+    if not isinstance(local_audio, dict):
+        raise ValueError("local_audio muss in der Konfiguration ein JSON-Objekt sein.")
+    local_enabled = bool(local_audio.get("enabled", True))
+    local_from = str(local_audio.get("from", "2026-07-08"))
+    local_clusters = max(2, int(local_audio.get("clusters", 120)))
+    local_min_confidence = float(local_audio.get("min_confidence", 0.72))
+    local_min_consensus = float(local_audio.get("min_consensus", 0.60))
+    local_min_similarity = float(local_audio.get("min_similarity", 0.35))
+    local_clap_model = str(
+        local_audio.get("clap_model", "laion/clap-htsat-unfused")
+    )
+    local_clap_batch_size = max(1, int(local_audio.get("clap_batch_size", 8)))
+
     openai_audio = config.get("openai_audio", {})
     if not isinstance(openai_audio, dict):
         raise ValueError("openai_audio muss in der Konfiguration ein JSON-Objekt sein.")
@@ -198,6 +212,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
         "BAUL_RM_OUTPUT_PREFIX": output_prefix,
         "BAUL_RM_PHOTO_ROOT": str(photo_target),
+        "BAUL_RM_LOCAL_CLUSTER_ENABLED": "1" if local_enabled else "0",
+        "BAUL_RM_LOCAL_CLUSTER_FROM": local_from,
+        "BAUL_RM_LOCAL_CLUSTER_COUNT": str(local_clusters),
+        "BAUL_RM_LOCAL_CLUSTER_CONFIDENCE": str(local_min_confidence),
+        "BAUL_RM_LOCAL_CLUSTER_CONSENSUS": str(local_min_consensus),
+        "BAUL_RM_LOCAL_CLUSTER_SIMILARITY": str(local_min_similarity),
+        "BAUL_RM_LOCAL_CLAP_MODEL": local_clap_model,
+        "BAUL_RM_LOCAL_CLAP_BATCH_SIZE": str(local_clap_batch_size),
         "BAUL_RM_OPENAI_CLUSTER_ENABLED": "1" if openai_enabled else "0",
         "BAUL_RM_OPENAI_CLUSTER_FROM": openai_from,
         "BAUL_RM_OPENAI_AUDIO_MODEL": openai_model,
@@ -279,6 +301,30 @@ def main(argv: list[str] | None = None) -> int:
 
         pipeline = runtime_root / "Verknuepfung" / "scripts" / "auto_pipeline_v10.py"
         command = [sys.executable, str(pipeline)]
+        local_pending = False
+        if local_enabled:
+            local_info_path = (
+                runtime_root
+                / "Aufbereit_v2"
+                / f"Local_Cluster_ab_{local_from.replace('-', '')}"
+                / "laufinfo.json"
+            )
+            info = _read_config(local_info_path) if local_info_path.is_file() else {}
+            expected = {
+                "cluster_count": local_clusters,
+                "min_confidence": local_min_confidence,
+                "min_consensus": local_min_consensus,
+                "min_similarity": local_min_similarity,
+                "clap_model": local_clap_model,
+            }
+            local_pending = (
+                not info
+                or info.get("from") != local_from
+                or info.get("classifier_version") != "baustelle-clap-v2"
+                or info.get("configuration") != expected
+                or not info.get("events_applied", False)
+            )
+
         openai_pending = False
         if openai_enabled:
             runinfo = (
@@ -307,6 +353,8 @@ def main(argv: list[str] | None = None) -> int:
             command.append("--control-changed")
 
         print("\nLokale Auswertung startet ...", flush=True)
+        if local_pending:
+            command.append("--local-clusters")
         if openai_pending:
             command.append("--openai-clusters")
         proc = subprocess.run(

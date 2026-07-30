@@ -13,6 +13,16 @@
 
                                     ]
                },
+    "local_audio":  {
+                         "enabled":  true,
+                         "from":  "2026-07-08",
+                         "clusters":  120,
+                         "min_confidence":  0.72,
+                         "min_consensus":  0.60,
+                         "min_similarity":  0.35,
+                         "clap_model":  "laion/clap-htsat-unfused",
+                         "clap_batch_size":  8
+                     },
     "openai_audio":  {
                          "enabled":  false,
                          "from":  "2026-07-08",
