@@ -25,7 +25,7 @@ CHANGELOG (vs. 06_report.py):
 Output: Aufbereit_v2/Laermquellen/ und Aufbereit_v2/Dauerlaermtabelle/
 Skript-Version: 06_report_v2 (Beschriftung+Nacht rev. 2026-06)
 """
-import os, sys, csv, glob, datetime, shutil
+import os, sys, csv, glob, datetime, shutil, json
 import textwrap
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 import numpy as np
@@ -99,6 +99,48 @@ DIR_LQ  = os.path.join(OUTDIR, "Laermquellen");      os.makedirs(DIR_LQ, exist_o
 DIR_TAB = os.path.join(OUTDIR, "Dauerlaermtabelle"); os.makedirs(DIR_TAB, exist_ok=True)
 OUTPUT_PREFIX = os.environ.get("BAUL_RM_OUTPUT_PREFIX", "Schallmessung")
 SITE_TITLE = os.environ.get("BAUL_RM_SITE_TITLE", "Messstandort")
+
+# GUARDRAIL: identisch zu gesamtbericht_lib_v3.py (geraet_anzeige/periode_fuer/
+# kalibrierung_fuer) - beide Skripte teilen keinen Code, lesen aber dieselben
+# BAUL_RM_*-Umgebungsvariablen aus settings.local.json (README "Abschnitt report").
+_GERAET_HERSTELLER = os.environ.get("BAUL_RM_DEVICE_MANUFACTURER", "")
+_GERAET_MODELL = os.environ.get("BAUL_RM_DEVICE_MODEL", "")
+_GERAET_KLASSE = os.environ.get("BAUL_RM_DEVICE_ACCURACY_CLASS", "")
+
+
+def _geraet_anzeige():
+    teile = [t for t in (_GERAET_HERSTELLER, _GERAET_MODELL) if t]
+    kern = " ".join(teile) if teile else "nicht angegeben"
+    return f"{kern}, {_GERAET_KLASSE}" if _GERAET_KLASSE else kern
+
+
+try:
+    _MESSZEITRAEUME = json.loads(os.environ.get("BAUL_RM_MEASUREMENT_PERIODS_JSON", "[]"))
+except (TypeError, ValueError, json.JSONDecodeError):
+    _MESSZEITRAEUME = []
+if not isinstance(_MESSZEITRAEUME, list):
+    _MESSZEITRAEUME = []
+
+
+def _periode_fuer(day):
+    for periode in _MESSZEITRAEUME:
+        if not isinstance(periode, dict):
+            continue
+        von = periode.get("from")
+        bis = periode.get("to")
+        if not von or day < von:
+            continue
+        if bis and day > bis:
+            continue
+        return periode
+    return None
+
+
+def _kalibrierung_fuer(day):
+    periode = _periode_fuer(day)
+    if periode and periode.get("calibration"):
+        return periode["calibration"]
+    return "nicht dokumentiert"
 OUT     = os.path.join(DIR_LQ,  f"{OUTPUT_PREFIX}_{DAY}_mit_Laermquellen.pdf")
 OUT_TAB = os.path.join(DIR_TAB, f"{OUTPUT_PREFIX}_{DAY}_Dauerlaerm_Tabelle.pdf")
 
@@ -631,8 +673,9 @@ kpi_lines.append(
 if tb_spans:
     kpi_lines.append(f"Bohrgeraet/schw. Geraet (Dauerbetrieb >=70dB): {tb_min:.0f} min")
 
-if DAY >= "2026-06-22":
-    kpi_lines.append("Kalibrierung: vor + nach Messung, protokolliert")
+_periode_heute = _periode_fuer(DAY)
+if _periode_heute and _periode_heute.get("calibration_documented"):
+    kpi_lines.append(f"Kalibrierung: {_kalibrierung_fuer(DAY)}")
 
 if nacht_kpi:
     kpi_lines.append("--- Nachtzeit (AVV: RW 40 / Eingreif 45 dB(A)) ---")
@@ -640,7 +683,7 @@ if nacht_kpi:
 
 kpi_lines.append(
     f"Lr (Takt 5s, TA-Laerm-Methodik, nur informativ): {fmt(lr_tag)} dB(A) [KI≈{fmt(ki_tag)}]")
-kpi_lines.append(f"Geraet: PCE-323 Kl.2 (IEC 61672)  |  AVV-Bewertung: LAeq")
+kpi_lines.append(f"Geraet: {_geraet_anzeige()}  |  AVV-Bewertung: LAeq")
 
 wrapped_kpi_lines = [
     textwrap.fill(
@@ -683,7 +726,7 @@ title_txt = fig.suptitle(
     + f" – {SITE_TITLE}",
     x=0.06, y=0.965, ha="left", fontsize=15, fontweight="bold", color=C_TITLE)
 subtitle_txt = fig.text(0.06, 0.915,
-    f"{day0.strftime('%d.%m.%Y')} ({wd}) · PCE-323 (Klasse 2, IEC 61672) · "
+    f"{day0.strftime('%d.%m.%Y')} ({wd}) · {_geraet_anzeige()} · "
     f"Messort: {POSITION} · AVV Baularm (LAeq)",
     fontsize=10, color="#555555")
 
@@ -815,9 +858,8 @@ ERL = [
      ["Primäre AVV-Beurteilung: LAeq. Lr ist TA-Laerm-spezifisch.",
       "KT = 0 (Tonzuschlag nicht messtechnisch bestimmt)"]),
     ("Messgeraet",
-     "PCE-323, Klasse 2, IEC 61672-1:2013",
-     [("Kalibrierung vor + nach Messung dokumentiert" if DAY >= "2026-06-22"
-       else "Werkskalibrierung; keine gesonderte Feldkalibrierung protokolliert")]),
+     _geraet_anzeige(),
+     [_kalibrierung_fuer(DAY)]),
     ("Laermquellen-Klassifikation",
      "PANNs CNN14 (AudioSet, 527 Klassen) – KI-Schaetzung, geringere Beweiskraft als Pegelwerte",
      ["Leq je Quelle = energetischer Mittelwert (arith. Mittel unzulaessig fuer Pegel)",

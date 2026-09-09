@@ -30,6 +30,48 @@ Dateinamen bleiben damit außerhalb des öffentlichen Repositorys.
 .\run_pipeline.bat
 ```
 
+### Abschnitt `report` — Gerät, Messaufbau, Kalibrierung
+
+Diese Angaben erscheinen im Gesamtbericht (Seiten "Rechtliche Einordnung",
+"Dokumentation Messort/Messaufbau" und auf jeder Tagesseite). Bis v10.3.0 waren
+sie für einen einzelnen Messfall fest in `gesamtbericht_lib_v3.py` einprogrammiert
+(mehrfach mit leicht abweichendem Wortlaut) - seit v10.4.0 werden sie aus
+`settings.local.json` gelesen, damit eine neue Messkampagne ohne Code-Änderung
+auskommt.
+
+- `device`: `manufacturer` (Hersteller), `model` (Typ/Modellbezeichnung),
+  `accuracy_class` (Genauigkeitsklasse, z. B. `"Klasse 2 (IEC 61672-1:2013)"`),
+  `serial_number` (Seriennummer). Leer gelassene Felder erscheinen im Bericht
+  als `"nicht angegeben"` statt eines erfundenen Werts.
+- `weather_station_id`/`weather_station_name`: DWD-Stationskennung und -Name
+  für die automatische Wetterzeile je Messtag (`meteo_dwd.py`). Ohne Angabe
+  gilt weiterhin München-Stadt (03379) als Fallback - für eine neue Messkampagne
+  an einem anderen Standort **unbedingt setzen**, sonst zeigt der Bericht die
+  falsche Station an.
+- `measurement_periods`: Liste von Zeitabschnitten, in denen sich Aufbau oder
+  Kalibrierung geändert haben - z. B. weil das Mikrofon ab einem Datum anders
+  aufgestellt wurde. Jeder Eintrag:
+  ```json
+  {
+    "from": "2026-06-15",
+    "to": null,
+    "indoor": false,
+    "mic_height": "140 cm (vollständig freier Ständer)",
+    "distance_m": 3.5,
+    "window_state": null,
+    "calibration": "94 dB(A), PCE-SC 43; vor Messung, protokolliert",
+    "calibration_documented": true
+  }
+  ```
+  `to: null` heißt "bis auf Weiteres gültig". Ein Tag ohne passenden Zeitraum
+  zeigt `"nicht dokumentiert"` statt eines geratenen Werts. `window_state`
+  (Fenster offen/geschlossen) ist nur für Innenraummessungen relevant und
+  bleibt bei Außenmessungen unbeachtet. `distance_m` (Entfernung Mikrofon zur
+  Quelle) ist optional - ohne Angabe erscheint keine Entfernungszeile.
+  `calibration_documented: true` hebt die Kalibrierung im Bericht grün als
+  "protokolliert" hervor (z. B. eine per Vor-/Nach-Messung dokumentierte
+  Feldkalibrierung) statt grau als bloße Werkskalibrierung.
+
 Nützliche Optionen:
 
 ```powershell
@@ -112,6 +154,25 @@ unter `.baul-rm/quarantine/` im Cache abgelegt.
 Ein API-Schluessel ist fuer die lokale Erkennung nicht erforderlich. Das
 Startdatum und die Pruefschwellen stehen im Abschnitt `local_audio` der lokalen
 Konfiguration.
+
+## Neu in v10.4.0
+
+- Geräte- und Messaufbau-Angaben (Hersteller, Typ, Genauigkeitsklasse,
+  Seriennummer, Kalibrierung, Mikrofonhöhe, Entfernung zur Quelle, Fenster
+  offen/geschlossen bei Innenraummessungen, DWD-Wetterstation) kommen jetzt aus
+  `settings.local.json` (Abschnitt `report`, siehe oben) statt fest im Code
+  einprogrammiert zu sein - eine neue Messkampagne braucht dafür keine
+  Code-Änderung mehr.
+- Neu: `report.device` (Hersteller/Typ/Genauigkeitsklasse/Seriennummer) und
+  `report.measurement_periods` (datumsabschnittsweise Kalibrierung,
+  Mikrofonhöhe, Entfernung, Fensterzustand).
+- Bisher fehlten Hersteller, Seriennummer, Entfernung und Fensterzustand im
+  Bericht komplett - sie erscheinen jetzt, sofern konfiguriert (kein
+  erfundener Wert, wenn nicht gesetzt: "nicht dokumentiert" bzw. die Zeile
+  entfällt).
+- `06_report_v2.py` und `gesamtbericht_lib_v3.py` lasen Gerät/Kalibrierung
+  bisher unabhängig voneinander mit leicht unterschiedlichem Wortlaut - beide
+  lesen jetzt dieselben `BAUL_RM_*`-Umgebungsvariablen.
 
 ## Abhängigkeiten
 

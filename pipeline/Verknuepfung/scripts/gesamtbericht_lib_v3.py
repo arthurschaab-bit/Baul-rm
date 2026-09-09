@@ -107,6 +107,132 @@ except (TypeError, ValueError, json.JSONDecodeError):
     _setup_groups = []
 MESSAUFBAU_GROUPS = _setup_groups if isinstance(_setup_groups, list) else []
 
+# ============================================================
+# GERÄT + MESSAUFBAU-ZEITRÄUME (settings.local.json "report", ab v10.4.0)
+#
+# Vorher fest einprogrammiert (PCE-323/Kalibrierdatum/Mikrofonhöhe je Fall
+# hart im Code) - jetzt aus der Konfiguration, damit eine neue Messkampagne
+# ohne Code-Änderung auskommt. Siehe README "Abschnitt report".
+# ============================================================
+GERAET_HERSTELLER = os.environ.get("BAUL_RM_DEVICE_MANUFACTURER", "")
+GERAET_MODELL = os.environ.get("BAUL_RM_DEVICE_MODEL", "")
+GERAET_KLASSE = os.environ.get("BAUL_RM_DEVICE_ACCURACY_CLASS", "")
+GERAET_SERIENNUMMER = os.environ.get("BAUL_RM_DEVICE_SERIAL_NUMBER", "")
+
+
+def geraet_anzeige(mit_seriennummer=False):
+    """Einzeilige Geräte-Anzeige aus Hersteller/Modell/Klasse - eine Quelle statt
+    der bisher vier unabhängig formulierten Literale je Fundstelle."""
+    teile = [t for t in (GERAET_HERSTELLER, GERAET_MODELL) if t]
+    kern = " ".join(teile) if teile else "nicht angegeben"
+    if GERAET_KLASSE:
+        kern = f"{kern}, {GERAET_KLASSE}"
+    if mit_seriennummer and GERAET_SERIENNUMMER:
+        kern = f"{kern} (Serien-Nr. {GERAET_SERIENNUMMER})"
+    return kern
+
+
+try:
+    _measurement_periods = json.loads(os.environ.get("BAUL_RM_MEASUREMENT_PERIODS_JSON", "[]"))
+except (TypeError, ValueError, json.JSONDecodeError):
+    _measurement_periods = []
+MESSZEITRAEUME = _measurement_periods if isinstance(_measurement_periods, list) else []
+
+_NICHT_DOKUMENTIERT = "nicht dokumentiert"
+
+
+def periode_fuer(day):
+    """Liefert den konfigurierten Messaufbau-Zeitraum (dict) für [day] (YYYY-MM-DD),
+    oder None, wenn keiner passt - dann zeigen die Aufrufer _NICHT_DOKUMENTIERT statt
+    eines geratenen Werts. `to: null` bedeutet "bis auf Weiteres gültig"."""
+    for periode in MESSZEITRAEUME:
+        if not isinstance(periode, dict):
+            continue
+        von = periode.get("from")
+        bis = periode.get("to")
+        if not von or day < von:
+            continue
+        if bis and day > bis:
+            continue
+        return periode
+    return None
+
+
+def mikrofonhoehe_fuer(day, indoor):
+    periode = periode_fuer(day)
+    if periode:
+        wert = periode.get("mic_height")
+        if wert:
+            return wert
+    return f"{_NICHT_DOKUMENTIERT} (Innenraum)" if indoor else _NICHT_DOKUMENTIERT
+
+
+def kalibrierung_fuer(day):
+    periode = periode_fuer(day)
+    if periode and periode.get("calibration"):
+        return periode["calibration"]
+    return _NICHT_DOKUMENTIERT
+
+
+def entfernung_fuer(day):
+    """Entfernung Mikrofon–Quelle in Metern, oder None (keine Zeile im Bericht -
+    kein erfundener Wert)."""
+    periode = periode_fuer(day)
+    if periode:
+        wert = periode.get("distance_m")
+        if isinstance(wert, (int, float)):
+            return wert
+    return None
+
+
+def _perioden_uebersicht(feld_key):
+    """Wie [kalibrierungs_uebersicht], aber generisch fuer ein beliebiges Feld eines
+    Messzeitraums (mic_height/distance_m/window_state) - `None` statt eines Strings,
+    wenn KEIN Zeitraum das Feld gesetzt hat (dann bleibt die Zeile im Bericht ganz weg,
+    statt eine Nicht-Angabe zu behaupten)."""
+    teile = []
+    for periode in MESSZEITRAEUME:
+        if not isinstance(periode, dict):
+            continue
+        wert = periode.get(feld_key)
+        if wert is None or wert == "":
+            continue
+        von = periode.get("from", "?")
+        bis = periode.get("to")
+        zeitraum = f"ab {von}" if not bis else f"{von}–{bis}"
+        anzeige = f"{wert} m" if feld_key == "distance_m" else wert
+        teile.append(f"{zeitraum}: {anzeige}")
+    return "; ".join(teile) if teile else None
+
+
+def kalibrierungs_uebersicht():
+    """Kompakte Zusammenfassung aller konfigurierten Kalibrierungs-Zeiträume für die
+    Methodik-Seite - eine Aufzählung "ab <von>[–<bis>]: <text>" statt eines für einen
+    einzelnen Fall fest formulierten Satzes."""
+    teile = []
+    for periode in MESSZEITRAEUME:
+        if not isinstance(periode, dict):
+            continue
+        kal = periode.get("calibration")
+        if not kal:
+            continue
+        von = periode.get("from", "?")
+        bis = periode.get("to")
+        zeitraum = f"ab {von}" if not bis else f"{von}–{bis}"
+        teile.append(f"{zeitraum}: {kal}")
+    return "; ".join(teile) if teile else _NICHT_DOKUMENTIERT
+
+
+def fensterzustand_fuer(day):
+    """Fenster offen/geschlossen - nur für Innenraummessungen relevant. None, wenn
+    nicht konfiguriert (keine Zeile im Bericht)."""
+    periode = periode_fuer(day)
+    if periode:
+        wert = periode.get("window_state")
+        if wert:
+            return wert
+    return None
+
 DAYS_ALL_DEFAULT = [
     "2026-06-26","2026-06-25","2026-06-24","2026-06-23","2026-06-22","2026-06-19",
     "2026-06-18","2026-06-17","2026-06-16","2026-06-15",
@@ -390,18 +516,16 @@ def write_video_audit(all_data):
         w.writerows(rows)
     return out_csv, rows
 
-# ============================================================
-# MIKROFONHÖHE-REGIME (Angabe Mandant) — v3 Gruppe J
-#   01.06.–14.06.: 98–100 cm (auf Möbeln: Tisch 100 / Stuhl+Box 98)
-#   ab 15.06.:     140 cm (freier Ständer, messtechnisch belastbarer)
-#   Mai (innen):   nicht dokumentiert
-# ============================================================
-def mic_height(day, indoor):
+def mikrofonhoehe_kurz(day, indoor):
+    """Kompakte Spaltendarstellung von [mikrofonhoehe_fuer] fuer die
+    Tages-Positionstabelle (feste Breite) - nimmt den Teil vor der ersten
+    Klammer, falls vorhanden, sonst den vollen konfigurierten Wert."""
     if indoor:
-        return "nicht dokumentiert (Innenraum)"
-    if day < "2026-06-15":
-        return "98–100 cm (Möbel-Aufbau)"
-    return "140 cm (freier Ständer)"
+        return "—"
+    voll = mikrofonhoehe_fuer(day, indoor)
+    if voll.startswith(_NICHT_DOKUMENTIERT):
+        return "—"
+    return voll.split(" (")[0]
 
 REFERENZ_TAGE = {"2026-06-01", "2026-06-02", "2026-06-08"}  # ohne signifikante Bautätigkeit (Angabe Mandant)
 
@@ -449,7 +573,12 @@ def load_meteo():
     return out
 
 METEO = load_meteo()
-METEO_STATION = "DWD München-Stadt (03379)"
+# Gleicher Default wie meteo_dwd.py (Fallback fuer bereits laufende Kampagnen ohne
+# aktualisierte settings.local.json) - Anzeige und tatsaechlich abgefragte Station
+# duerfen nie auseinanderlaufen.
+_WEATHER_STATION_ID = os.environ.get("BAUL_RM_WEATHER_STATION_ID") or "03379"
+_WEATHER_STATION_NAME = os.environ.get("BAUL_RM_WEATHER_STATION_NAME") or "München-Stadt"
+METEO_STATION = f"DWD {_WEATHER_STATION_NAME} ({_WEATHER_STATION_ID})"
 
 def meteo_line(day):
     """Kompakte Wetterzeile je Tag oder None."""
@@ -978,7 +1107,7 @@ def page_cover(pp, all_data):
     # 2 Spalten je 4 Zeilen
     L1=[(f"Messtage:",f"{n_days}  ({n_outdoor} Außen, {n_indoor} Innenraum)"),
         (f"Messort:",f"Balkon 3. OG, NW/SO (Außen); Innenraum (Mai)"),
-        (f"Gerät:",f"PCE-323, Klasse 2 (IEC 61672-1:2013)"),
+        (f"Gerät:",geraet_anzeige()),
         (f"Bewertung:",f"AVV Baulärm; LAeq — WA §34 BauGB bestätigt")]
     yy=0.840
     for lbl,val in L1:
@@ -1100,7 +1229,7 @@ def page_cover(pp, all_data):
     fig.add_artist(mlines.Line2D([0.06,0.94],[0.332-_shift,0.332-_shift],
                                   color='#DDDDDD',lw=0.5,transform=fig.transFigure))
     fig.text(0.06,0.310-_shift,
-             "Messwerte: gemessene Pegel PCE-323, IEC 61672-1:2013 Klasse 2 "
+             f"Messwerte: gemessene Pegel {geraet_anzeige()} "
              f"(Messunsicherheit ±{GERAET_TOL_DB:.1f} dB(A)). Auswertung Tagzeit 07–20 h.",
              fontsize=8,color='#777777')
     fig.text(0.06,0.293-_shift,
@@ -1276,9 +1405,9 @@ def _legal_p3(fig,ax):
 
     y=h1("5. Messmethodik",y)
     y=h2("Gerät und Kalibrierung",y)
-    y=bul("PCE-323, Schallpegelmessgerät Klasse 2 nach IEC 61672-1:2013",y)
+    y=bul(f"{geraet_anzeige(mit_seriennummer=True)}, Schallpegelmessgerät",y)
     y=bul("1-Sekunden-LAF-Messwerte (A-Bewertung, Fast-Zeitkonstante 125 ms), kontinuierlich",y)
-    y=bul("Kalibrierung auf 94 dB(A) mit Kalibrator PCE-SC 43; ab 22.06.2026 Feldkalibrierung vor Messung protokolliert; Mai/früh-Juni: Werkskalibrierung",y)
+    y=bul(f"Kalibrierung: {kalibrierungs_uebersicht()}",y)
     y=bul(f"Messunsicherheit Klasse 2: ±{GERAET_TOL_DB:.1f} dB(A) — offen ausgewiesen (nicht herausgerechnet)",y)
     y=bul("Messort: Außen-/Innenmessung; Details und Positionen siehe Messaufbau-Seite",y)
     y-=0.008
@@ -1609,8 +1738,13 @@ def page_messaufbau(pp, all_data):
     y=h2("Messort und Aufstellung",y)
     y=wbul(f"Standort: {ADRESSE}. {STANDORT_RECHTSHINWEIS}",y)
     y=wbul("Messpunkte: Außenbalkon Südost (SO) / Nordwest (NW); Mai-Reihe im Innenraum.",y)
-    y=wbul("Mikrofonhöhe: 01.06.–14.06. 98–100 cm (auf Tisch bzw. Stuhl+Box mit kleinem Ständer); "
-           "ab 15.06. 140 cm (vollständig freier Ständer).",y)
+    y=wbul(f"Mikrofonhöhe: {_perioden_uebersicht('mic_height') or _NICHT_DOKUMENTIERT}.",y)
+    _entfernung = _perioden_uebersicht('distance_m')
+    if _entfernung:
+        y=wbul(f"Entfernung Mikrofon–Quelle: {_entfernung}.",y)
+    _fenster = _perioden_uebersicht('window_state')
+    if _fenster:
+        y=wbul(f"Fenster (Innenraummessungen): {_fenster}.",y)
     y=wbul("Belastbarkeit: Aufstellung ab 15.06. (freier Ständer, 140 cm) messtechnisch belastbarer; "
            "früher Aufbau (98–100 cm, auf Möbeln) nahe Reflexionsflächen — bei Vergleichen berücksichtigen.",y,'#8B4000')
     y=wbul("Aufgrund der unterschiedlichen Konfiguration ist ein direkter quantitativer Pegelvergleich "
@@ -1634,8 +1768,7 @@ def page_messaufbau(pp, all_data):
     pos_lines=[]
     for d in all_data:
         umg="Innen" if d['indoor'] else "Außen"
-        h_short=("98–100cm" if (not d['indoor'] and d['day']<"2026-06-15")
-                 else "140cm" if not d['indoor'] else "—")
+        h_short=mikrofonhoehe_kurz(d['day'], d['indoor'])
         pos_lines.append(f"{d['day0'].strftime('%d.%m.')} {umg:<5} {h_short:<8} {d['position'][:30]}")
     half=(len(pos_lines)+1)//2
     for i,line in enumerate(pos_lines[:half]):
@@ -1919,7 +2052,8 @@ def page_kernbefunde(pp, all_data):
     col=["Tag","LAeq","Abdeckung","Zeit > 55 dB","Dauerlärm ≥60 dB","Kalibrierung"]
     rows=[]
     for d in valid:
-        cal="Feldkal." if d['day']>="2026-06-22" else "Werkskal."
+        _kal_periode = periode_fuer(d['day'])
+        cal="Feldkal." if (_kal_periode and _kal_periode.get("calibration_documented")) else "Werkskal."
         rows.append([d['day0'].strftime("%d.%m."), f"{d['laeq_tag']:.1f} dB",
                      f"{d['abd_tag']*100:.0f} %",
                      f"{d['pct_thr']:.0f} % ({d['n_above_sec']//60} min)",
@@ -2109,7 +2243,7 @@ def page_innenraum(pp):
     fig.text(0.06,0.951,"INNENRAUMBETROFFENHEIT — Wohnnutzungsbezug",color='white',
              fontsize=14,fontweight='bold')
 
-    fig.text(0.06,0.895,"1 — Innenraummessungen (PCE-323)",fontsize=11,fontweight='bold',color=C_TITLE)
+    fig.text(0.06,0.895,f"1 — Innenraummessungen ({geraet_anzeige()})",fontsize=11,fontweight='bold',color=C_TITLE)
     t1=[["20.05.","Innenraum","51,5 dB(A)","84,4 dB(A)","69 %"],
         ["21.05.","Innenraum","50,9 dB(A)","81,6 dB(A)","73 %"],
         ["22.05.","Innenraum","50,1 dB(A)","80,8 dB(A)","41 %"]]
@@ -2254,7 +2388,7 @@ def page_referenzpegel_aussen(pp, all_data):
             0.945,0.023,fontsize=9.8,color=C_RICHT,fontweight='bold')
 
     fig.text(0.06,0.05,
-        "Kalibrierte Messung (PCE-323, 94 dB(A) Referenzkalibrierung), identische Methodik wie an den "
+        f"Kalibrierte Messung ({geraet_anzeige()}), identische Methodik wie an den "
         "Bautagen. Keine dokumentierte Bautätigkeit lt. Bautagebuch an beiden Tagen (Wochenende).",
         fontsize=7.8,color='#888888',fontstyle='italic')
     fig.text(0.06,0.022,f"{VERSION_STR}  |  Referenzpegel Außenbereich (27./28.06.)",fontsize=7.5,color='#999999')
@@ -2927,16 +3061,30 @@ def page_day(pp, d, page_num):
         f"Messunsicherheit: ±{GERAET_TOL_DB:.1f} dB(A) (Klasse 2, IEC 61672)",
         M_R,0.0145,fontsize=7.4,color='#777777')
     # J: Mikrofonhöhe je Tag (Aufbau-Regime)
-    ym=fig_text_wrap(fig,MX,ym,f"Mikrofonhöhe: {mic_height(day, d['indoor'])}",
+    ym=fig_text_wrap(fig,MX,ym,f"Mikrofonhöhe: {mikrofonhoehe_fuer(day, d['indoor'])}",
                      M_R,0.0145,fontsize=7.4,color='#777777')
+    _entfernung_tag = entfernung_fuer(day)
+    if _entfernung_tag is not None:
+        ym=fig_text_wrap(fig,MX,ym,f"Entfernung Mikrofon–Quelle: {_entfernung_tag} m",
+                         M_R,0.0145,fontsize=7.4,color='#777777')
+    if d['indoor']:
+        _fenster_tag = fensterzustand_fuer(day)
+        if _fenster_tag:
+            ym=fig_text_wrap(fig,MX,ym,f"Fenster: {_fenster_tag}",
+                             M_R,0.0145,fontsize=7.4,color='#777777')
     # Kalibrierung + Geraet in EINER Zeile zusammengefasst (Platz sparen) und VOR dem
     # optionalen Toleranzband platziert, damit diese Pflichtangaben nie durch Platzmangel
     # am Spaltenende entfallen (fig_text_wrap bricht still ab, siehe min_y).
-    cal_txt=("Kalibrierung: 94 dB(A), PCE-SC 43; vor Messung, protokolliert" if day>="2026-06-22"
-             else "Kalibrierung: Werkskalibrierung, PCE-SC 43 (94 dB(A))")
+    _periode_tag = periode_fuer(day)
+    cal_txt=f"Kalibrierung: {kalibrierung_fuer(day)}"
+    # Gruen hebt eine als protokolliert markierte Feldkalibrierung hervor (Owner-Vorgabe je
+    # Zeitraum ueber "calibration_documented"), grau alles andere (Werkskalibrierung,
+    # nicht dokumentiert) - dieselbe Unterscheidung wie zuvor am Datum "2026-06-22", jetzt aber
+    # ein expliziter Konfigurationswert statt eines impliziten Datumsvergleichs.
+    _kal_dokumentiert = bool(_periode_tag and _periode_tag.get("calibration_documented"))
     ym=fig_text_wrap(fig,MX,ym,cal_txt,M_R,0.0145,fontsize=7.4,min_y=0.033,
-                     color='#228B22' if day>="2026-06-22" else '#888888')
-    ym=fig_text_wrap(fig,MX,ym,"Gerät: PCE-323, Klasse 2 (IEC 61672-1:2013)",
+                     color='#228B22' if _kal_dokumentiert else '#888888')
+    ym=fig_text_wrap(fig,MX,ym,f"Gerät: {geraet_anzeige()}",
                      M_R,0.0145,fontsize=7.4,color='#777777',min_y=0.033)
     # Meteorologie je Messtag (DWD-Anhaltspunkt) — ebenfalls vor dem Toleranzband (Prioritaet
     # vor der optionalen Grenznah-Praezisierung unten). min_y abgesenkt, da diese Pflichtangaben

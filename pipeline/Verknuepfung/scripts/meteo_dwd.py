@@ -18,7 +18,11 @@ VK   = os.path.abspath(os.path.join(HERE, ".."))
 BASE = os.path.abspath(os.path.join(VK, ".."))
 OUT  = os.path.join(HERE, "meteo_je_messtag.csv")
 
-STATION = "03379"; STATION_NAME = "München-Stadt"
+# Default bleibt die bisherige Station als Fallback fuer bereits laufende Kampagnen
+# ohne aktualisierte settings.local.json - report.weather_station_id/-name (README
+# "Abschnitt report") ueberschreiben ihn fuer eine neue Messkampagne.
+STATION = os.environ.get("BAUL_RM_WEATHER_STATION_ID") or "03379"
+STATION_NAME = os.environ.get("BAUL_RM_WEATHER_STATION_NAME") or "München-Stadt"
 B = "https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/hourly/"
 SRC = {
     "wind":            B + f"wind/recent/stundenwerte_FF_{STATION}_akt.zip",
