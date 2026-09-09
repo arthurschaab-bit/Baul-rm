@@ -11,6 +11,17 @@
                    "photo_root":  "F:\\Pfad\\zum\\Fotos_Videos-Ordner",
                    "setup_groups":  [
 
+                                    ],
+                   "device":  {
+                                  "manufacturer":  "",
+                                  "model":  "",
+                                  "accuracy_class":  "",
+                                  "serial_number":  ""
+                              },
+                   "weather_station_id":  "",
+                   "weather_station_name":  "",
+                   "measurement_periods":  [
+
                                     ]
                },
     "local_audio":  {

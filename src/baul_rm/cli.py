@@ -202,6 +202,12 @@ def main(argv: list[str] | None = None) -> int:
         else (cloud_root.parent / "Fotos_Videos").resolve()
     )
     photo_target = runtime_root / "Fotos_Videos"
+    device = report.get("device", {})
+    if not isinstance(device, dict):
+        raise ValueError("report.device muss in der Konfiguration ein JSON-Objekt sein.")
+    measurement_periods = report.get("measurement_periods", [])
+    if not isinstance(measurement_periods, list):
+        raise ValueError("report.measurement_periods muss in der Konfiguration eine Liste sein.")
     report_env = {
         "BAUL_RM_ADDRESS": str(report.get("address", "Messadresse")),
         "BAUL_RM_TENANT": str(report.get("tenant", "Auftraggeber")),
@@ -209,6 +215,15 @@ def main(argv: list[str] | None = None) -> int:
         "BAUL_RM_LEGAL_NOTE": str(report.get("legal_note", "Gebietscharakter lokal dokumentiert.")),
         "BAUL_RM_SETUP_GROUPS_JSON": json.dumps(
             report.get("setup_groups", []), ensure_ascii=False
+        ),
+        "BAUL_RM_DEVICE_MANUFACTURER": str(device.get("manufacturer", "")),
+        "BAUL_RM_DEVICE_MODEL": str(device.get("model", "")),
+        "BAUL_RM_DEVICE_ACCURACY_CLASS": str(device.get("accuracy_class", "")),
+        "BAUL_RM_DEVICE_SERIAL_NUMBER": str(device.get("serial_number", "")),
+        "BAUL_RM_WEATHER_STATION_ID": str(report.get("weather_station_id", "")),
+        "BAUL_RM_WEATHER_STATION_NAME": str(report.get("weather_station_name", "")),
+        "BAUL_RM_MEASUREMENT_PERIODS_JSON": json.dumps(
+            measurement_periods, ensure_ascii=False
         ),
         "BAUL_RM_OUTPUT_PREFIX": output_prefix,
         "BAUL_RM_PHOTO_ROOT": str(photo_target),
