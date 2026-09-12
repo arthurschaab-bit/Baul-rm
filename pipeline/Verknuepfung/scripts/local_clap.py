@@ -14,7 +14,7 @@ from scipy.signal import resample_poly
 
 
 DEFAULT_MODEL = "laion/clap-htsat-unfused"
-PROMPT_VERSION = "baustelle-clap-v1"
+PROMPT_VERSION = "baustelle-clap-v2"
 
 PROMPTS: dict[str, list[str]] = {
     "Bagger": [
@@ -26,6 +26,11 @@ PROMPTS: dict[str, list[str]] = {
         "a deep drilling rig drilling foundations on a construction site",
         "a large rotary construction drilling machine operating",
         "heavy foundation drilling equipment with engine and drill noise",
+    ],
+    "Schweres Baugeraet/sonstige Maschine": [
+        "a heavy construction machine operating that is not a drilling rig",
+        "a crane winch concrete mixer loader roller or other construction machine",
+        "metallic rotating or hydraulic machinery working on a construction site",
     ],
     "Motor/Diesel": [
         "a diesel engine or electric generator running continuously",
@@ -43,7 +48,7 @@ PROMPTS: dict[str, list[str]] = {
         "sawing and cutting material with a loud machine",
     ],
     "Fahrzeug": [
-        "road traffic with cars trucks buses or a passing train",
+        "road traffic with cars trucks or buses",
         "a truck or car driving past outdoors",
         "urban traffic and heavy vehicles on a street",
     ],

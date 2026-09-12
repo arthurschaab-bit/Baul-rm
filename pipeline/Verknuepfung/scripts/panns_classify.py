@@ -7,11 +7,12 @@ CNN14 liefert je Clip Wahrscheinlichkeiten für 527 AudioSet-Klassen. Wir summie
 die Wahrscheinlichkeit verwandter Klassen je Baustellen-Kategorie und nehmen die
 stärkste. Die rohen Top-Labels werden zur Kontrolle mitgeführt.
 
-WICHTIG (Standort mit Tiefbohrer): Der dominante Klang ist ein
-kontinuierliches tieffrequentes Rumpeln. AudioSet hat keine Baustellen-Klasse dafür
-und ordnet es als "Train/Rail/Subway" ein. Dieser Cluster wird hier als
-"Bohrgeraet/schweres Geraet" gewertet (die dominante Maschine vor Ort).
-Die zu breite Oberklasse "Vehicle" wird bewusst NICHT verwendet.
+WICHTIG (Baustellenkontext ohne Zug in der Nähe): AudioSet kann schwere,
+rollende, rotierende oder metallisch quietschende Baustellenmaschinen als
+"Train/Rail/Subway" fehlklassifizieren. Diese Rohlabels werden deshalb nur als
+"Schweres Baugeraet/sonstige Maschine" gewertet. Sie sind kein Nachweis für
+Verkehr oder ein bestimmtes Bohrgerät. Die zu breite Oberklasse "Vehicle" wird
+bewusst NICHT verwendet.
 """
 import os
 import numpy as np
@@ -29,11 +30,11 @@ CAT_MAP = {
     "Heavy engine (low frequency)": "Motor/Diesel", "Idling": "Motor/Diesel",
     "Engine starting": "Motor/Diesel", "Engine knocking": "Motor/Diesel",
     "Accelerating, revving, vroom": "Motor/Diesel",
-    # Bohrgerät / schweres Gerät: kontinuierliches Rumpeln (AudioSet: Zug/Gleis/U-Bahn)
-    "Train": "Bohrgeraet/schweres Geraet", "Rail transport": "Bohrgeraet/schweres Geraet",
-    "Railroad car, train wagon": "Bohrgeraet/schweres Geraet",
-    "Subway, metro, underground": "Bohrgeraet/schweres Geraet",
-    "Train wheels squealing": "Bohrgeraet/schweres Geraet",
+    # Schwere Baustellenmaschine: Train/Rail ist hier nur akustische Fehlähnlichkeit
+    "Train": "Schweres Baugeraet/sonstige Maschine", "Rail transport": "Schweres Baugeraet/sonstige Maschine",
+    "Railroad car, train wagon": "Schweres Baugeraet/sonstige Maschine",
+    "Subway, metro, underground": "Schweres Baugeraet/sonstige Maschine",
+    "Train wheels squealing": "Schweres Baugeraet/sonstige Maschine",
     # Fahrzeug / LKW / Verkehr (spezifisch, NICHT die Oberklasse "Vehicle")
     "Truck": "Fahrzeug", "Bus": "Fahrzeug", "Car": "Fahrzeug",
     "Motor vehicle (road)": "Fahrzeug", "Air brake": "Fahrzeug",
@@ -59,9 +60,9 @@ CAT_MAP = {
     "Vacuum cleaner": "Umgebung/Sonstiges", "Air conditioning": "Umgebung/Sonstiges",
     "Mechanical fan": "Umgebung/Sonstiges",
 }
-BAU_RELEVANT = ["Bohrgeraet/schweres Geraet", "Motor/Diesel", "Schlagen/Bohren",
+BAU_RELEVANT = ["Bohrgeraet/schweres Geraet", "Schweres Baugeraet/sonstige Maschine", "Motor/Diesel", "Schlagen/Bohren",
                 "Saege", "Fahrzeug", "Signal/Warnton"]
-ALL_CATS = ["Bohrgeraet/schweres Geraet", "Motor/Diesel", "Schlagen/Bohren", "Saege",
+ALL_CATS = ["Bohrgeraet/schweres Geraet", "Schweres Baugeraet/sonstige Maschine", "Motor/Diesel", "Schlagen/Bohren", "Saege",
             "Fahrzeug", "Signal/Warnton", "Sprache", "Umgebung/Sonstiges"]
 
 _AT = None

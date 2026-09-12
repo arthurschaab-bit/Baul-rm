@@ -92,17 +92,18 @@ unter `.baul-rm/quarantine/` im Cache abgelegt.
 - API-Antworten werden je Cluster gecacht. Ohne `OPENAI_API_KEY` wird das
   Clusterpaket vorbereitet, aber es werden keine Daten an OpenAI gesendet.
 
-## Neu in v10.3.0
+## Neu in v10.3.1
 
 - PANNs bildet lokal die akustischen Cluster. CLAP hoert anschliessend nur drei
   Vertreter je Cluster und ordnet sie per Zero-Shot-Audiovergleich den
   Baustellen- und Umgebungskategorien zu. Es gibt keine API-Aufrufe und keine
   Kosten pro WAV.
 - Verarbeitet werden ausschliesslich Ereignisse ab einschliesslich 08.07.2026.
-- `Train`/`Rail` wird nicht mehr als Bohrgeraet umgedeutet. CLAP vergleicht
-  stattdessen ausdrueckliche Beschreibungen von Bagger, Tief-/Fundamentbohrung,
-  Motor, Werkzeug, Verkehr, Signalen, Sprache und Umgebung. Pegel und Dauer sind
-  keine Erkennungsmerkmale.
+- Am Messort gibt es keinen Zug. `Train`/`Rail` wird als AudioSet-Fehlaehnlichkeit
+  zu einer rollenden, rotierenden oder metallischen Baustellenmaschine behandelt,
+  nie als reale Zugquelle oder automatischer Tiefbohrernachweis. CLAP trennt dafuer
+  spezifische Bohrgeraete von `Schweres Baugeraet/sonstige Maschine`.
+- Pegel und Dauer sind keine Erkennungsmerkmale der Audio-Klassifikation.
 - Homogene Cluster werden automatisch uebernommen. Uneindeutige Mischcluster
   erhalten `Unklar/Mischgeraeusch` und erscheinen gebuendelt in
   `Aufbereit_v2/Local_Cluster_ab_20260708/pruefliste.csv`.

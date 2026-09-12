@@ -38,10 +38,11 @@ PROB_NPY = VK / "panns_probs.npy"
 PROB_IDX = VK / "panns_probs_index.json"
 DEFAULT_FROM = "2026-07-08"
 DEFAULT_MODEL = "gpt-audio-1.5"
-PROMPT_VERSION = "baustelle-mischgeraeusche-v1"
+PROMPT_VERSION = "baustelle-mischgeraeusche-v2"
 CATEGORIES = [
     "Bagger",
     "Bohrgeraet/schweres Geraet",
+    "Schweres Baugeraet/sonstige Maschine",
     "Motor/Diesel",
     "Schlagen/Bohren",
     "Saege",
@@ -54,6 +55,8 @@ CATEGORIES = [
 CATEGORY_ALIASES = {
     "Bohrgerät/schweres Gerät": "Bohrgeraet/schweres Geraet",
     "Bohrgerät / schweres Gerät": "Bohrgeraet/schweres Geraet",
+    "Schweres Baugerät": "Schweres Baugeraet/sonstige Maschine",
+    "Sonstige Baumaschine": "Schweres Baugeraet/sonstige Maschine",
     "Säge": "Saege",
     "Unklar": "Unklar/Mischgeraeusch",
     "Mischgeräusch": "Unklar/Mischgeraeusch",
@@ -262,6 +265,9 @@ Das Mikrofon zeigt in Richtung einer aktiven Baustelle. Typische Baustellengerae
 koennen gleichzeitig mit allgemeinen Aussengeraeuschen wie Strassenverkehr, Wind,
 Voegeln oder Sprache vorkommen. Beurteile deshalb jede Stichprobe als moegliches
 Mischgeraeusch und trenne primaere und parallele Quellen soweit akustisch moeglich.
+Am Messort gibt es keinen Zug. Train/Rail-aehnliche Klangmerkmale sind daher als
+moegliche schwere, rollende, rotierende oder metallische Baustellenmaschine zu
+deuten und nicht als reale Zugquelle.
 Hoher dB(A)-Pegel, lange Dauer oder tieffrequentes Rumpeln allein sind KEIN Beleg
 fuer einen Tiefbohrer. Waehle Bohrgeraet/schweres Geraet nur bei passenden
 akustischen Merkmalen. Erlaubte Hauptlabels: {categories}.

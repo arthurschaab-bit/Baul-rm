@@ -18,7 +18,7 @@ from openpyxl.utils import get_column_letter
 VK = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(VK, "Laermquellen_Verknuepfung.xlsx")
 
-QUELLEN = ["Bagger","Bohrgeraet/schweres Geraet","Motor/Diesel","Schlagen/Bohren",
+QUELLEN = ["Bagger","Bohrgeraet/schweres Geraet","Schweres Baugeraet/sonstige Maschine","Motor/Diesel","Schlagen/Bohren",
            "Saege","Fahrzeug","Signal/Warnton","Sprache","Umgebung/Sonstiges","Unklar/Mischgeraeusch"]
 
 def read_csv(name):
@@ -58,8 +58,9 @@ lines = [
     ("   ab 08.07.2026. Kandidat, Status und Konfidenz stehen in den Cluster-Spalten.", 11, False),
     ("2. 'Unklar/Mischgeraeusch' bedeutet: keine belastbare automatische Zuordnung.", 11, False),
     ("   Diese Cluster und niedrige Konfidenzen bitte zuerst gegenhören.", 11, False),
-    ("3. 'Train/Rail' wird als Verkehrsmerkmal behandelt, nicht als Bohrgerät. Ein", 11, False),
-    ("   Bohrgerät braucht Werkzeug-/Bohr- UND Motorbelege; Pegel/Dauer reichen nicht.", 11, False),
+    ("3. Am Messort gibt es keinen Zug: 'Train/Rail' ist hier nur die akustische", 11, False),
+    ("   Ähnlichkeit einer schweren Baumaschine, weder Verkehr noch Bohrgerätnachweis.", 11, False),
+    ("   Ein Bohrgerät braucht Werkzeug-/Bohr- UND Motorbelege; Pegel/Dauer reichen nicht.", 11, False),
     ("4. Clip anhören (WAV-Link), dann die echte Quelle in 'Laermquelle_geprueft' wählen.", 11, False),
     ("", 11, False),
     ("Hinweis: Die vollständige Verknüpfung ALLER Ereignisse (auch leise) liegt in", 11, False),

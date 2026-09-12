@@ -320,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:
             local_pending = (
                 not info
                 or info.get("from") != local_from
-                or info.get("classifier_version") != "baustelle-clap-v2"
+                or info.get("classifier_version") != "baustelle-clap-v3"
                 or info.get("configuration") != expected
                 or not info.get("events_applied", False)
             )

@@ -1,6 +1,6 @@
 {
-    "version":  "v10.3.0",
-    "version_str":  "07_gesamtbericht v10.3.0 (2026-07) [gesamtbericht_lib_v4]",
+    "version":  "v10.3.1",
+    "version_str":  "07_gesamtbericht v10.3.1 (2026-07) [gesamtbericht_lib_v4]",
     "gesamtbericht_pdf":  "Gesamtbericht_Schallmessung_v10.pdf",
     "gesamtbericht_pdf_ohne_wav":  "Gesamtbericht_Schallmessung_v10_ohne_WAV.pdf",
     "manifest_csv":  "Rohdaten_Manifest_v10.csv",

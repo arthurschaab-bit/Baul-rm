@@ -109,6 +109,7 @@ tb = _ilu.module_from_spec(_sp); _sp.loader.exec_module(tb)
 C_TITLE="#1F4E79"; C_MOM="#C9C9C9"; C_LAEQ="#1F4E79"; C_RICHT="#C00000"; C_EING="#ED7D31"
 SRC_COLOR = {
     "Bagger":"#E09B2A", "Bohrgeraet/schweres Geraet":"#8C564B",
+    "Schweres Baugeraet/sonstige Maschine":"#4E6E81",
     "Motor/Diesel":"#BCBD22", "Schlagen/Bohren":"#D62728",
     "Saege":"#FF7F0E", "Fahrzeug":"#9467BD",
     "Signal/Warnton":"#17BECF", "Sprache":"#2CA02C", "Umgebung/Sonstiges":"#BDBDBD",
@@ -116,13 +117,14 @@ SRC_COLOR = {
 def src_color(s): return SRC_COLOR.get(s, "#7F7F7F")
 ALIAS = {"Tiefbohrer": "Bohrgeraet/schweres Geraet"}
 DISP = {"Bagger":"Bagger", "Bohrgeraet/schweres Geraet":"Bohrgerät/schw. Gerät",
+        "Schweres Baugeraet/sonstige Maschine":"Schw. Baugerät/sonst.",
         "Motor/Diesel":"Motor/Diesel", "Schlagen/Bohren":"Schlagen/Bohren",
         "Saege":"Säge", "Fahrzeug":"Fahrzeug", "Signal/Warnton":"Signal/Warnton",
         "Sprache":"Sprache", "Umgebung/Sonstiges":"Umgebung/Sonstiges"}
 def disp(s): return DISP.get(s, s)
 NONBAU_COLOR = "#6B9E9A"; NODATA_COLOR = "#ECECEC"
 INDOOR_REF = 55.0
-BAU_RELEVANT = ["Bagger","Bohrgeraet/schweres Geraet","Motor/Diesel",
+BAU_RELEVANT = ["Bagger","Bohrgeraet/schweres Geraet","Schweres Baugeraet/sonstige Maschine","Motor/Diesel",
                 "Schlagen/Bohren","Saege","Fahrzeug","Signal/Warnton"]
 
 def load_pos(day):

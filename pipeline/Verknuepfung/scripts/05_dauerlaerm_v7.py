@@ -6,8 +6,8 @@ Dauerlaerm-Erkennung fuer v7.
 
 Unterschied zu 05_dauerlaerm.py:
 - keine erneute PANNs-Inferenz pro Phase
-- vorhandene Quellenzuordnungen aus relevante_ereignisse.csv und alte
-  dauerlaerm.csv werden erhalten
+- manuell gepruefte Quellen aus alter dauerlaerm.csv werden erhalten
+- automatische Quellen werden aus den aktuellen Ereignislabels neu berechnet
 - reine CSV-Tage ohne WAV-ZIP koennen trotzdem Dauerlaerm-Phasen bekommen
 """
 from __future__ import annotations
@@ -145,6 +145,26 @@ def dominant_source(sample: list[dict[str, object]], relevant_by_wav: dict[str, 
     return dom, detail, repr_clip, repr_path
 
 
+def phase_source(
+    sample: list[dict[str, object]],
+    relevant_by_wav: dict[str, dict[str, str]],
+    old: dict[str, str],
+) -> tuple[str, str, str, str, str, bool]:
+    """Nutzt aktuelle Auto-Labels und schuetzt nur manuelle Altpruefungen."""
+    dom, detail, repr_clip, repr_path = dominant_source(sample, relevant_by_wav)
+    checked = (old.get("Laermquelle_geprueft") or "").strip()
+    reused = False
+    if not dom or dom == "—":
+        old_dom = (old.get("Laermquelle_Auto") or "").strip()
+        if old_dom:
+            dom = old_dom
+            detail = old.get("Quellen_Detail", "")
+            repr_clip = old.get("repr_Clip", "")
+            repr_path = old.get("repr_Clip_Pfad", "")
+            reused = True
+    return dom, checked, detail, repr_clip, repr_path, reused
+
+
 def main() -> int:
     wav_by_day = read_master_events()
     relevant_by_wav = read_relevant_sources()
@@ -172,15 +192,10 @@ def main() -> int:
                 evs_sorted = sorted(evs, key=lambda e: (e.get("dba") or 0), reverse=True)
                 sample = evs_sorted[:MAX_CLIPS_PER_PHASE]
 
-                dom = old.get("Laermquelle_Auto", "")
-                checked = old.get("Laermquelle_geprueft", "")
-                detail = old.get("Quellen_Detail", "")
-                repr_clip = old.get("repr_Clip", "")
-                repr_path = old.get("repr_Clip_Pfad", "")
-                if old:
-                    reused_source += 1
-                if not dom:
-                    dom, detail, repr_clip, repr_path = dominant_source(sample, relevant_by_wav)
+                dom, checked, detail, repr_clip, repr_path, reused = phase_source(
+                    sample, relevant_by_wav, old
+                )
+                reused_source += int(reused)
 
                 rows.append(
                     {
@@ -226,7 +241,7 @@ def main() -> int:
         writer.writerows(rows)
 
     print(f"{len(rows)} Dauerlaerm-Phasen erkannt")
-    print(f"  Quellen aus alter dauerlaerm.csv wiederverwendet: {reused_source}")
+    print(f"  Alte Auto-Quelle nur mangels aktueller Belege genutzt: {reused_source}")
     for threshold, minutes in CRITERIA:
         crit = f">={threshold}dB/>={minutes}min"
         subset = [r for r in rows if r["Kriterium"] == crit]

@@ -32,7 +32,7 @@ STATE_PATH = OUTDIR / "automation_state_v10.json"
 FALLBACK_STATE_PATH = OUTDIR / "automation_state_v8.json"
 TEMPLATE_CONFIG_PATH = HERE / "pipeline_config_v10.json"
 CONFIG_PATH = OUTDIR / "pipeline_config_v10.runtime.json"
-VERSION = "v10.3.0"
+VERSION = "v10.3.1"
 RUN_ID = core.now_stamp()
 
 RUN_LOG = core.RUN_LOG
@@ -60,8 +60,8 @@ CORE_BACKUP_FILES = [
 OUTPUT_PREFIX = os.environ.get("BAUL_RM_OUTPUT_PREFIX", "Schallmessung")
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "version": "v10.3.0",
-    "version_str": "07_gesamtbericht v10.3.0 (2026-07) [gesamtbericht_lib_v4]",
+    "version": "v10.3.1",
+    "version_str": "07_gesamtbericht v10.3.1 (2026-07) [gesamtbericht_lib_v4]",
     "gesamtbericht_pdf": f"Gesamtbericht_{OUTPUT_PREFIX}_v10.pdf",
     "gesamtbericht_pdf_ohne_wav": f"Gesamtbericht_{OUTPUT_PREFIX}_v10_ohne_WAV.pdf",
     "manifest_csv": "Rohdaten_Manifest_v10.csv",
@@ -438,7 +438,10 @@ def main() -> int:
     audio_changes = sorted(
         set(pending_before + audio_trigger_changes(discovery, raw_changes))
     )
-    audio_needed = bool(force_full or audio_changes)
+    # Auch reine Codeaenderungen koennen Audio-Mapping, Modell-Prompts oder
+    # relevante Ereignislogik betreffen. PANNs liest dabei seine vorhandenen
+    # Wahrscheinlichkeiten aus dem Cache und wendet nur die Zuordnung neu an.
+    audio_needed = bool(force_full or code_changed or audio_changes)
     data_needed = bool(force_full or code_changed or raw_changes)
     reports_all = bool(
         force_full
@@ -496,7 +499,7 @@ def main() -> int:
         local_current = bool(
             isinstance(local_info, dict)
             and local_info.get("from") == local_from
-            and local_info.get("classifier_version") == "baustelle-clap-v2"
+            and local_info.get("classifier_version") == "baustelle-clap-v3"
             and local_info.get("configuration") == expected_local_config
             and local_info.get("events_applied", False)
         )
