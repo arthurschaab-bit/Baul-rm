@@ -47,3 +47,9 @@ manifest.json
 Beide Varianten verwenden denselben vollständigen Code-Commit und denselben Wetterabruf. Alle Wetterzahlen stammen aus der normalisierten CSV. Der Kompaktbericht verwendet seine eigenen Kennwerte und einen aus der Vergleichs-CSV abgeleiteten Satz zur Gegenvariante. Kalibrier- und Quellenregeln bleiben unverändert.
 
 Quellen/Lizenz: [DWD CDC 10-Minuten-Niederschlag](https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/10_minutes/precipitation/), [Wind](https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/10_minutes/wind/), [Extremwind](https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/10_minutes/extreme_wind/), [Tageswerte](https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/daily/kl/). Datenbasis: Deutscher Wetterdienst, CC BY 4.0.
+
+## Bisheriger Autolauf
+
+Auch `auto_pipeline_v10.py` verwendet für Berichtsläufe das externe Profil. In der privaten lokalen Konfiguration stehen `report.private_profile` und `report.meteo_mode` (siehe anonymes Beispiel). Der bisherige Stundenabruf wurde durch einen Verweis auf den neuen Zehn-Minuten-Abruf mit explizitem Zeitraum ersetzt. Der Autolauf ruft den gemeinsamen Wetterabruf im Profil auf und erzeugt darüber beide Varianten. Ohne Profil bricht ein Berichtslauf vor der Auswertung mit einer konkreten Konfigurationsmeldung ab. Ein unveränderter Lauf ohne Berichtserzeugung bleibt ein No-op.
+
+Der Launcher prüft zusätzlich, dass alle vier PDFs während des aktuellen Laufs neu geschrieben wurden. Eine alte Gegenvariante kann dadurch keinen unvollständigen neuen Lauf als erfolgreich erscheinen lassen. Der vorhandene Autolauf erhält die tatsächlichen privaten Ausgabepfade über eine lokale Ergebnisdatei; er führt keine alten Einzelfassungen mehr als aktuelle Gesamtberichte auf.

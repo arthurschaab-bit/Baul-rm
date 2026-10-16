@@ -235,7 +235,6 @@ def fetch_weather(root,start,end,station='03379',refresh=False):
                        'timestamps':[x.isoformat() for x in index[usable]],'reason':'Primary station missing parameter/interval'})
                 missing=frame[essential].isna().any(axis=1)
                 if not missing.any():break
-                if distance>100:break
         audit['missing'][product]=int(missing.sum())
         if missing.any():raise ValueError(f'Incomplete weather {product}: {int(missing.sum())} intervals; no complete observation substitute')
         result=result.join(frame)

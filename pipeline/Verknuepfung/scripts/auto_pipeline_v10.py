@@ -423,6 +423,11 @@ def main() -> int:
         print("Keine Aenderung erkannt. Alle Auswertungsschritte bleiben unveraendert.")
         return 0
 
+    profile=os.environ.get('BAUL_RM_PRIVATE_REPORT_PROFILE')
+    launcher=os.environ.get('BAUL_RM_PRIVATE_REPORT_LAUNCHER')
+    if not profile or not launcher:
+        raise ValueError('Configure report.private_profile outside the checkout. Report builds require both weather variants; legacy single-PDF builds are disabled.')
+
     for row in discovery["summary"]:
         if row["day"] > core.BASELINE_REPORT_END and row["csv_count"] and not row["zip_count_nominal"]:
             WARNINGS.append(
@@ -460,10 +465,9 @@ def main() -> int:
         else:
             mark_skipped("01_index", "Rohdaten unveraendert")
 
-        if raw_changes or force_full:
-            core.run_step("meteo_dwd", [str(HERE / "meteo_dwd.py")], required=False)
-        else:
-            mark_skipped("meteo_dwd", "keine neuen Messtage")
+        # The paired profile fetches/verifies one shared DWD snapshot on every
+        # report build; errors are fatal there, including reports-only runs.
+        mark_skipped("meteo_dwd", "gemeinsamer Wetterabruf im verpflichtenden A/B-Berichtsprofil")
 
         if skip_audio and audio_needed:
             pending_after = sorted(set(audio_changes or pending_before or ["Voll-Lauf ausstehend"]))
@@ -626,24 +630,21 @@ def main() -> int:
             [str(HERE / "09_uebersicht.py")],
             required=False,
         )
-        core.run_step(
-            "07_gesamtbericht_v10",
-            [str(HERE / config["gesamtbericht_script"])],
-            env={"SCHALLBERICHT_CONFIG": str(CONFIG_PATH)},
-        )
-        core.run_step(
-            "07_gesamtbericht_v10_ohne_wav",
-            [str(HERE / "07_gesamtbericht_v10_ohne_wav.py")],
-            required=False,
-            env={"SCHALLBERICHT_CONFIG": str(CONFIG_PATH)},
-        )
+        result_pointer=OUTDIR/'paired_report_result.json'
+        if result_pointer.exists():result_pointer.unlink()
+        core.run_step('07_gesamtbericht_A_und_B',[launcher,'--profile',profile,
+            '--meteo-mode',os.environ.get('BAUL_RM_METEO_MODE','ausweisen'),
+            '--result-file',str(result_pointer)])
+        pair_root=Path(json.loads(result_pointer.read_text(encoding='utf-8'))['output_directory'])
+        paired_outputs={name:str(pair_root/name) for name in (
+            'Gesamtbericht_A_Ausweisung.pdf','Gesamtbericht_B_Ausschluss.pdf',
+            'Kompaktbericht_A_Ausweisung.pdf','Kompaktbericht_B_Ausschluss.pdf','manifest.json')}
+        if not all(Path(path).is_file() for path in paired_outputs.values()):
+            raise ValueError('Incomplete paired report output')
         bautagebuch = write_bautagebuch_vorschlaege(discovery)
 
         outputs = {
-            "Gesamtbericht": rel(OUTDIR / config["gesamtbericht_pdf"]),
-            "Gesamtbericht ohne WAV": rel(
-                OUTDIR / config["gesamtbericht_pdf_ohne_wav"]
-            ),
+            **paired_outputs,
             "Rohdaten-Manifest": rel(OUTDIR / config["manifest_csv"]),
             "Excel-Arbeitsmappe": rel(VK / "Laermquellen_Verknuepfung.xlsx"),
             "Bautagebuch-Vorschlaege": rel(bautagebuch),

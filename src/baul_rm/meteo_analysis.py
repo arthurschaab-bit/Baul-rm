@@ -183,7 +183,10 @@ def prepare_variants(data,weather,days,output,config=MeteoConfig(),analysis_star
     return {'ausweisen':a,'ausschliessen':b},comparison,event_rows,ranges
 
 
-def require_both_variants(output):
+def require_both_variants(output,created_after_ns=None):
     required=[f'{kind}_{suffix}.pdf' for kind in ('Gesamtbericht','Kompaktbericht') for suffix,_ in VARIANTS.values()]
     missing=[name for name in required if not (Path(output)/name).is_file() or not (Path(output)/name).stat().st_size]
     if missing:raise ValueError('Incomplete paired report run: '+', '.join(missing))
+    if created_after_ns is not None:
+        stale=[name for name in required if (Path(output)/name).stat().st_mtime_ns<created_after_ns]
+        if stale:raise ValueError('Variants were not all generated in this run: '+', '.join(stale))

@@ -3,6 +3,8 @@
     "cache_root":  "%LOCALAPPDATA%\\Baul-rm\\workspace",
     "sync_back":  true,
     "report":  {
+                   "private_profile": "C:\\PrivateReports\\profile.py",
+                   "meteo_mode": "ausweisen",
                    "address":  "Messadresse",
                    "tenant":  "Auftraggeber",
                    "site_title":  "Messstandort",

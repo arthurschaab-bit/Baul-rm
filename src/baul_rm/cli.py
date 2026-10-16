@@ -30,6 +30,18 @@ def _expand_path(value: str, base: Path | None = None) -> Path:
     return expanded.resolve()
 
 
+def _private_report_environment(report,config_base,checkout):
+    from .report_core import require_external_path
+    mode=report.get('meteo_mode','ausweisen')
+    if mode not in ('ausweisen','ausschliessen'):
+        raise ValueError('report.meteo_mode must be ausweisen or ausschliessen')
+    profile=report.get('private_profile')
+    path=require_external_path(_expand_path(str(profile),config_base),checkout) if profile else None
+    return {'BAUL_RM_PRIVATE_REPORT_PROFILE':str(path) if path else '',
+            'BAUL_RM_PRIVATE_REPORT_LAUNCHER':str(Path(checkout)/'run_private_report.py'),
+            'BAUL_RM_METEO_MODE':mode}
+
+
 def _read_config(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(
@@ -223,6 +235,7 @@ def main(argv: list[str] | None = None) -> int:
         "BAUL_RM_OPENAI_CLUSTER_ENABLED": "1" if openai_enabled else "0",
         "BAUL_RM_OPENAI_CLUSTER_FROM": openai_from,
         "BAUL_RM_OPENAI_AUDIO_MODEL": openai_model,
+        **_private_report_environment(report,config_path.parent,repo_root),
     }
     print(f"Baul-rm v{__version__}")
     print(f"Cloud: {cloud_root}")
