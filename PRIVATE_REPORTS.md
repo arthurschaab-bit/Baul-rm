@@ -28,3 +28,7 @@ def run(core):
 ```
 
 Dieser Entwurf ist nur eine Schnittstellenillustration; ein ausführbares Profil muss seine lokalen Eingaben selbst laden. Die Originale und der vollständige Fallrenderer bleiben im privaten Arbeitsordner. Keine realen Messwerte werden für Tests benötigt.
+
+Nur vertrauenswürdige lokale Profile ausführen: Das Python-Profil kann beliebigen Code mit den Rechten des laufenden Prozesses ausführen. Die Checkout-Wurzel wird vom Launcher explizit übergeben; die Prüfung funktioniert auch mit installiertem Paket. Import- und Ausgabepfade müssen außerhalb des Checkouts liegen. Es wird kein Pickle exportiert. Die breiten PDF-/Pickle-/NPZ-Ausschlüsse sind absichtlich zusätzliche Vorsorge gegen versehentliches Veröffentlichen von Belegen; öffentliche synthetische Fixtures sollen Textdateien sein.
+
+Die Kriterien für Dauerphasen sind getrennt: energetischer Minuten-LAeq >=60 dB qualifiziert eine Minute; nur tatsächlich gemessene Sekunden >60 dB zählen zur Dauer (mindestens 600). Genau 60 dB liefert keine Dauer über 60. Explizite Wetterausschlüsse trennen Phasen auch bei kurzen Lücken.

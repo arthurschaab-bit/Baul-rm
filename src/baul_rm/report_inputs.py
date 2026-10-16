@@ -1,27 +1,25 @@
-"""Reproducible Noisecontrol CSV/SQLite import and measurement report.
+"""Reproducible Noisecontrol CSV/SQLite normalization and provenance audit.
 
 Inputs are never changed. Pure PCE CSV aggregates have priority; mixed
 CSV seconds use separate PCE database records when available; all choices and failed database reads are recorded in the audit.
 """
 from __future__ import annotations
 
-import argparse
 import csv
 import datetime as dt
 import hashlib
-import json
 import math
 import re
 import sqlite3
-from collections import Counter
+from contextlib import closing
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+from .report_core import resolve_pce_seconds
 
 TZ = ZoneInfo("Europe/Berlin")
-COLORS = {"GEMISCHT": "#2466ae", "PCE_323": "#228747", "MIKROFON": "#888888", "UNBEKANNT": "#ae7b28"}
 COLUMNS = ["leq", "maximum", "raw", "source", "weighting", "time_weighting", "origin"]
 
 
@@ -131,7 +129,12 @@ def read_database_day(connection, day, audit, origin):
     if not rows:
         return pd.DataFrame(columns=COLUMNS)
     df = pd.DataFrame(rows, columns=["id","ms","level","weighting","flags","time_weighting","device"])
-    mask = np.isfinite(df.level) & (df.level > 0) & (df.level <= 160) & ((df['flags'].astype(int)&11)==0)
+    df['level']=pd.to_numeric(df.level,errors='coerce')
+    flags=pd.to_numeric(df['flags'],errors='coerce')
+    # Missing/non-integral flags do not establish valid measurement status.
+    known_flags=flags.notna() & flags.mod(1).eq(0) & flags.between(0,2**31-1)
+    valid_flags=(flags.where(known_flags,11).astype('int64')&11)==0
+    mask = np.isfinite(df.level) & (df.level > 0) & (df.level <= 160) & valid_flags
     audit["database_days"].append({"day":day, "origin":origin, "raw_rows":len(df), "excluded":int((~mask).sum())})
     df = df[mask].copy()
     if df.empty:
@@ -199,33 +202,26 @@ def collect(root, start, end, databases, legacy_root=None):
     data = pd.DataFrame(columns=COLUMNS)
     for df in frames:
         data = combine(data,df,audit,str(df.origin.iloc[0]))
+    database_data = pd.DataFrame(columns=COLUMNS)
     for database in databases:
+        database=Path(database).resolve()
         print('Sicherung: '+database.name,flush=True)
-        c = sqlite3.connect(database.as_uri()+"?mode=ro",uri=True)
-        try:
-            check = c.execute("pragma quick_check").fetchall()
-            integrity = "ok" if check==[("ok",)] else str(check[:3])
-        except sqlite3.DatabaseError as e:
-            integrity = str(e)
-        audit["databases"].append({"path":str(database),"integrity":integrity})
-        origin = "DB:"+database.name
-        for day in days:
-            df = read_database_day(c,day,audit,origin)
-            if not df.empty:
-                from .report_core import resolve_pce_seconds
-                replacement,_,selection=resolve_pce_seconds(data,df)
-                # Keep unselected originals until all database files were tried.
-                source=data.get('source_export',data.source)
-                replace_idx=data.index[source.eq('GEMISCHT')].intersection(df.index)
-                data=data.drop(index=replace_idx)
-                data=pd.concat([data,df.loc[replace_idx]]).sort_index()
-                data = combine(data,df,audit,origin+":"+day)
-                print(day+': '+str(len(df))+' lesbare Sekunden',flush=True)
-        c.close()
+        with closing(sqlite3.connect(database.as_uri()+"?mode=ro",uri=True)) as c:
+            check=c.execute("pragma quick_check").fetchall()
+            if check != [("ok",)]:
+                raise ValueError('Database integrity check failed: '+str(check[:3]))
+            audit["databases"].append({"path":str(database),"integrity":"ok"})
+            origin = "DB:"+database.name
+            for day in days:
+                df = read_database_day(c,day,audit,origin)
+                if not df.empty:
+                    database_data=combine(database_data,df,audit,origin+":"+day)
         manifest.append({"type":"DB-Kopie","path":str(database),"bytes":database.stat().st_size,"sha256":file_hash(database)})
-    from .report_core import resolve_pce_seconds
-    empty=pd.DataFrame(columns=COLUMNS)
-    data,excluded,selection=resolve_pce_seconds(data,empty)
+    # Audit CSV/DB differences before replacing any original mixed aggregate.
+    combine(data,database_data,audit,'CSV versus separate PCE database')
+    selected,excluded,selection=resolve_pce_seconds(data,database_data)
+    supplements=database_data.loc[~database_data.index.isin(data.index)]
+    data=pd.concat([selected,supplements]).sort_index()
     audit['source_selection']=selection
     audit['excluded_source_seconds']=len(excluded)
     audit["valid_seconds"] = len(data)

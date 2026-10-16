@@ -9,4 +9,4 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile',type=Path,required=True,help='Private local Python profile outside this checkout')
     args=parser.parse_args()
-    report_core.load_private_profile(args.profile).run(report_core)
+    report_core.load_private_profile(args.profile,Path(__file__).resolve().parent).run(report_core)
