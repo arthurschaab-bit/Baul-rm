@@ -17,3 +17,15 @@ Verknuepfung/*.npy
 Verknuepfung/relevante_wavs/
 Aufbereit/
 Aufbereit_v2/
+
+# Local report evidence and identity
+private/
+private_profiles/
+*.local.json
+*.local.py
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.pdf
+*.pkl
+*.npz

@@ -1,0 +1,30 @@
+# Öffentliche Pipeline, private Berichtsdaten
+
+Adresse, Name, Messdateien, Kalibrierfotos, Tagebuch, Berichtsvorlagen mit Falltexten und erzeugte PDFs bleiben außerhalb dieses Repositorys. Der öffentliche Rechenkern enthält ausschließlich allgemeine Regeln und synthetische Tests.
+
+Ein privates Python-Profil definiert `run(core)` und ruft die lokale Berichtserzeugung auf. Der Pfad wird nur beim lokalen Start übergeben:
+
+```powershell
+python run_private_report.py --profile C:\PrivateReports\profile.py
+```
+
+Das Profil kann eine ebenfalls private JSON-Datei mit Adresse, Name, Eingabepfaden und Belegen lesen. Es wird ausdrücklich nicht im Checkout gespeichert. Der Launcher lehnt Profile innerhalb des Repositorys ab.
+
+Der Rechenkern bietet die PCE-Quellenauswahl mit DB-Vorrang für gemischte Sekunden, energetischen LAeq und die lauteste Stunde ohne Vorrang leiserer, vollständigerer Fenster. Er verändert keine Eingabewerte. Herkunft und ausgeschlossene Sekunden werden zurückgegeben, damit das private Profil sie im Prüfprotokoll dokumentieren kann.
+
+`run_pce_inputs.py` importiert ältere Geräte-CSV, App-Aggregate, App-Sitzungen und reine PCE-Datenbankzeilen. Die lokalen Eingaben und Ausgaben werden ausschließlich per Parameter übergeben. Beispiel mit fiktiven Pfaden und Daten:
+
+```powershell
+python run_pce_inputs.py --input C:\PrivateReports\exports --database C:\PrivateReports\backup.sqlite --start 2001-01-01 --end 2001-01-31 --output C:\PrivateReports\result
+```
+
+`duration_phases` zählt eine Phase erst bei mindestens zehn qualifizierten energetischen Minuten und mindestens 600 tatsächlich gemessenen Sekunden über 60 dB. Gemessene niedrige Minuten trennen Phasen. Die lauteste zulässige Stunde kann bei kurzen, isolierten lauten Abschnitten unter dem Gesamt-LAeq liegen; die Berechnung erzwingt deshalb keine mathematisch unzulässige Ungleichung.
+
+```python
+def run(core):
+    # Load local inputs and case configuration here.
+    selected, excluded, audit = core.resolve_pce_seconds(exports, database_pce)
+    # Render local reports from selected seconds and local templates.
+```
+
+Dieser Entwurf ist nur eine Schnittstellenillustration; ein ausführbares Profil muss seine lokalen Eingaben selbst laden. Die Originale und der vollständige Fallrenderer bleiben im privaten Arbeitsordner. Keine realen Messwerte werden für Tests benötigt.
