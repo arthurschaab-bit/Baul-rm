@@ -57,6 +57,10 @@ def decorate_daily(fig,day,weather,event_rows,ranges,mode,config=MeteoConfig()):
     begin=pd.Timestamp(day+' 07:00');end=pd.Timestamp(day+' 20:00')
     noise.set_position([.075,.650,.865,.268]);noise.set_xlim(begin,end)
     noise.tick_params(axis='x',labelbottom=False)
+    for artist in noise.texts:
+        artist.set_text(artist.get_text().replace(
+            'violett hinterlegt = Zeitraum vor 07 Uhr / ab 20 Uhr; ',
+            'Taggrafik 07–20 Uhr; '))
     # Measured gaps keep the existing //// hatch. Weather removals get xxx.
     if mode=='ausschliessen':
         for r in ranges:
