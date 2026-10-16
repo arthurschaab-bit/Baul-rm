@@ -17,3 +17,21 @@ Verknuepfung/*.npy
 Verknuepfung/relevante_wavs/
 Aufbereit/
 Aufbereit_v2/
+
+# Local report evidence and identity
+private/
+private_profiles/
+*.local.json
+*.local.py
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.pdf
+*.pkl
+*.npz
+# Defense in depth; launchers also reject private paths inside the checkout.
+audit.json
+selected_seconds.csv
+!data/meteo/**/audit.json
+!data/meteo/raw/**/*.pdf
+tmp/
