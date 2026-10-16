@@ -1,7 +1,2 @@
-* text=auto
-*.py text eol=lf
-*.md text eol=lf
-*.json text eol=lf
-*.toml text eol=lf
-*.txt text eol=lf
-*.bat text eol=crlf
+# DWD snapshots and normalized tables must survive clone byte-for-byte.
+data/meteo/** -text

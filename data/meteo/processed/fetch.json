@@ -1,0 +1,10 @@
+{
+  "start": "2026-05-20",
+  "end": "2026-10-10",
+  "station": "03379",
+  "fetched_at_utc": "2026-10-16T05:51:28.292741+00:00",
+  "raw_directory": "raw/2026-10-16T055128Z_824232c5",
+  "processed_sha256": "4662606f09cc7de40accaad3195cb2a9ec5d63c34a25a1f7c7d6d03c59da668f",
+  "attribution": "Datenbasis: Deutscher Wetterdienst; CC BY 4.0",
+  "audit_sha256": "0d359769bfa3936acacf3725c3cc698469497f2ec5496799ba8bcd80318f925c"
+}

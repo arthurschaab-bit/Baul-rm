@@ -50,7 +50,10 @@ def loudest_hour(frame,day_end,min_seconds=1800,day_start=None):
     frame=frame.loc[np.isfinite(frame.leq.to_numpy(dtype=float))]
     if len(frame)<min_seconds or day_end-day_start<3600:return None
     first,last=int(frame.index[0]),int(frame.index[-1])
-    grid=pd.Series(np.nan,index=np.arange(day_start,day_end))
+    # Preserve the report's measurement-span rule: first eligible window starts
+    # at the first measured second; no new trailing windows after the last
+    # measured second (except the existing short-span 3600-second window).
+    grid=pd.Series(np.nan,index=np.arange(first,min(day_end,max(last+1,first+3600))))
     grid.loc[frame.index]=10**(frame.leq.to_numpy(dtype=float)/10)
     values=grid.rolling(3600,min_periods=min_seconds).mean().iloc[3599:]
     values=values.loc[values.index<day_end].dropna()
@@ -93,6 +96,17 @@ def duration_phases(series, excluded_intervals=()):
     """
     values=series.dropna().sort_index()
     if values.empty:return []
+    if excluded_intervals:
+        # Segment before minute aggregation: even one excluded second inside a
+        # minute must split a phase. Never bridge an explicit weather exclusion.
+        pieces=[];start=values.index[0]
+        for a,b in sorted((pd.Timestamp(a),pd.Timestamp(b)) for a,b in excluded_intervals):
+            if b<=start:continue
+            if a>values.index[-1]:break
+            pieces.extend(duration_phases(values.loc[(values.index>=start)&(values.index<a)]))
+            start=max(start,b)
+        pieces.extend(duration_phases(values.loc[values.index>=start]))
+        return pieces
     minute=values.index.floor('min')
     energy=pd.Series(10**(values.to_numpy(dtype=float)/10),index=minute)
     means=energy.groupby(level=0).mean()

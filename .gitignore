@@ -32,3 +32,6 @@ private_profiles/
 # Defense in depth; launchers also reject private paths inside the checkout.
 audit.json
 selected_seconds.csv
+!data/meteo/**/audit.json
+!data/meteo/raw/**/*.pdf
+tmp/
