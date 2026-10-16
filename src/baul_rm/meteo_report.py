@@ -205,7 +205,9 @@ def finalize_pair(output,comparison_asset,commit,fetch):
         for kind in ('Gesamtbericht','Kompaktbericht'):
             with fitz.open(output/f'{kind}_{suffix}.pdf') as doc:
                 for page in doc:
-                    if label not in page.get_text():raise ValueError('Missing variant label in report')
+                    # Embedded Arial may extract spaces as NBSP. Normalize only
+                    # whitespace for validation; never alter the shared PDF asset.
+                    if label not in ' '.join(page.get_text().split()):raise ValueError('Missing variant label in report')
     manifest={'commit':commit,'weather_fetch':fetch,'comparison_content_stream_sha256':stream_hashes,
               'files':[{ 'file':p.relative_to(output).as_posix(),'bytes':p.stat().st_size,
                          'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
