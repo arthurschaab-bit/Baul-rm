@@ -56,10 +56,11 @@ def _runs(index,active,bridge_bins=0,known=None):
 
 def events(weather,config=MeteoConfig()):
     rows=[]
-    rain=(weather.rain_mm>0)|(weather.rain_duration_min>0)
+    rain=weather.rain_mm>0
+    traces=(weather.rain_mm==0)&(weather.rain_duration_min>0)
     wind=(weather.wind_mean_ms>=config.mean_wind_ms)|(weather.gust_ms>=config.gust_ms)
     known_rain=weather[['rain_mm','rain_duration_min']].notna().all(axis=1)
-    for kind,active,bridge,known in [('Niederschlag',rain,1,known_rain),('Wind',wind,0,None)]:
+    for kind,active,bridge,known in [('Niederschlag',rain,1,known_rain),('Spuren',traces,0,None),('Wind',wind,0,None)]:
         for first,last in _runs(weather.index,active,bridge,known):
             part=weather.iloc[first:last+1];begin=part.index[0]-pd.Timedelta(minutes=10);end=part.index[-1]
             mean=float(part.wind_mean_ms.mean());peak=float(part.wind_mean_ms.max());gust=float(part.gust_ms.max())
@@ -72,14 +73,15 @@ def events(weather,config=MeteoConfig()):
                 prevailing=float(np.rad2deg(np.arctan2(y,x))%360) if np.hypot(x,y)>1e-9 else None
             else:prevailing=None
             intensity=float(part.rain_mm.max()*6)
-            station_fields=['precipitation_station'] if kind=='Niederschlag' else ['wind_station','extreme_wind_station']
+            station_fields=['precipitation_station'] if kind!='Wind' else ['wind_station','extreme_wind_station']
             stations=sorted({str(x).zfill(5) for f in station_fields for x in part[f].dropna().unique()})
+            measured=part.loc[part.rain_mm.gt(0)] if kind=='Niederschlag' else part
             rows.append({'begin':begin.isoformat(),'end_exclusive':end.isoformat(),'type':kind,
                          'duration_min':(end-begin).total_seconds()/60,
-                         'rain_mm':float(part.rain_mm.sum(min_count=1)) if kind=='Niederschlag' else None,
-                         'rain_minutes':float(part.rain_duration_min.sum(min_count=1)) if kind=='Niederschlag' else None,
+                         'rain_mm':float(measured.rain_mm.sum(min_count=1)) if kind!='Wind' else None,
+                         'rain_minutes':float(measured.rain_duration_min.sum(min_count=1)) if kind!='Wind' else None,
                          'max_intensity_mm_h':intensity if kind=='Niederschlag' else None,
-                         'class':rain_class(intensity,config) if kind=='Niederschlag' else f'Bft {beaufort(peak)} (Mittelwindmaximum)',
+                         'class':rain_class(intensity,config) if kind=='Niederschlag' else ('Spuren' if kind=='Spuren' else f'Bft {beaufort(peak)} (aus max. 10-min-Mittelwind)'),
                          'wind_mean_ms':mean if kind=='Wind' else None,'wind_max_ms':peak if kind=='Wind' else None,
                          'gust_max_ms':gust if kind=='Wind' else None,'direction_deg':prevailing if kind=='Wind' else None,
                          'stations':','.join(stations)})
@@ -89,6 +91,7 @@ def events(weather,config=MeteoConfig()):
 def exclusion_ranges(event_rows,config=MeteoConfig()):
     rows=[]
     for event in event_rows:
+        if event['type']=='Spuren':continue
         rain=event['type']=='Niederschlag'
         begin=pd.Timestamp(event['begin']);end=pd.Timestamp(event['end_exclusive'])+pd.Timedelta(minutes=config.rain_buffer_min if rain else 0)
         rows.append({'begin_second':int(begin.timestamp()),'end_second_exclusive':int(end.timestamp()),
@@ -151,10 +154,13 @@ def daily_weather(weather,day,event_rows,pce_seconds=()):
         complete=len(part)==expected and part[['rain_mm','rain_duration_min','wind_mean_ms','gust_ms']].notna().all().all()
         matches=[r for r in event_rows if pd.Timestamp(r['begin'])<b and pd.Timestamp(r['end_exclusive'])>a]
         rain=[r for r in matches if r['type']=='Niederschlag'];wind=[r for r in matches if r['type']=='Wind']
+        measured_rain=part.loc[part.rain_mm.gt(0)]
+        traces=part.loc[part.rain_mm.eq(0)&part.rain_duration_min.gt(0)]
         values=np.asarray(pce_seconds,dtype=np.int64);values=values[(values>=int(a.timestamp()))&(values<int(b.timestamp()))]
         ranges=exclusion_ranges(matches,MeteoConfig(rain_buffer_min=0))
         rows.append({'day':day,'segment':label,'rain_mm':float(part.rain_mm.sum(min_count=expected)) if len(part) else None,
-                     'rain_events':len(rain),'rain_minutes':float(part.rain_duration_min.sum(min_count=expected)) if len(part) else None,
+                     'rain_events':len(rain),'rain_minutes':float(measured_rain.rain_duration_min.sum()) if complete else None,
+                     'trace_minutes':float(traces.rain_duration_min.sum()) if complete else None,
                      'wind_minutes':sum(max(0,(min(pd.Timestamp(r['end_exclusive']),b)-max(pd.Timestamp(r['begin']),a)).total_seconds()/60) for r in wind),
                      'max_intensity_mm_h':float(part.rain_mm.max()*6) if len(part) else None,
                      'gust_max_ms':float(part.gust_ms.max()) if len(part) else None,
