@@ -10,7 +10,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import fitz
-from .meteo_analysis import MeteoConfig,VARIANTS,rain_class,daily_weather
+from .meteo_analysis import MeteoConfig,VARIANTS,rain_class,events
 
 BLUE='#1F4E79'
 
@@ -46,9 +46,17 @@ def event_label(row,day):
     a,b=pd.Timestamp(row['begin']),pd.Timestamp(row['end_exclusive'])
     stamp=lambda x:x.strftime('%H:%M') if x.strftime('%Y-%m-%d')==day else x.strftime('%d.%m.%H:%M')
     label=stamp(a)+'–'+stamp(b)
+    if row['type']=='Spuren':
+        return f"{label} Spuren (Niederschlag erkannt, keine messbare Menge); {_value(row['rain_minutes'])} min"
     if row['type']=='Niederschlag':
         return f"{label} Regen {_value(row['rain_mm'],2)} mm; max. {_value(row['max_intensity_mm_h'])} mm/h; {row['class']}"
     return f"{label} Wind Ø/max. {_value(row['wind_mean_ms'])}/{_value(row['wind_max_ms'])}; Böe {_value(row['gust_max_ms'])} m/s; {_value(row['direction_deg'],0)}°; {row['class']}"
+
+
+def daytime_events(day,weather,config=MeteoConfig()):
+    start=pd.Timestamp(day+' 07:00',tz='Europe/Berlin')
+    end=pd.Timestamp(day+' 20:00',tz='Europe/Berlin')
+    return events(weather.loc[(weather.index>start)&(weather.index<=end)],config)
 
 
 def decorate_daily(fig,day,weather,event_rows,ranges,mode,config=MeteoConfig()):
@@ -88,15 +96,10 @@ def decorate_daily(fig,day,weather,event_rows,ranges,mode,config=MeteoConfig()):
     axis.tick_params(labelsize=6);wind.tick_params(labelsize=6);axis.grid(axis='y',lw=.3,color='#DDDDDD')
     qn=' / '.join(','.join(str(int(v)) for v in sorted(part[p+'_qn'].dropna().unique())) or '?' for p in ('precipitation','wind','extreme_wind'))
     fig.text(.075,.475,f'Regen .. leicht / // mäßig / xx stark; Linie = Mittel, ○ = Böe; Schwellen {config.mean_wind_ms:g}/{config.gust_ms:g} m/s. Station 03379; QN Regen/Wind/Böe: {qn}.',fontsize=6.5,color='#555555')
-    matches=event_rows_for_day(day,event_rows)
-    nights=[r for r in daily_weather(weather,day,event_rows) if r['segment']!='07-20']
-    night_text=' | '.join(f"{r['segment']}: Regen {_value(r['rain_mm'],2)} mm / {_value(r['rain_minutes'])} min; Wind {_value(r['wind_minutes'])} min, Böe {_value(r['gust_max_ms'])} m/s" for r in nights)
-    fig.text(.055,.461,'Nachtsegmente '+night_text,fontsize=6.4,color='#555555')
-    fig.text(.055,.447,'WETTEREREIGNISSE 00–24 UHR (Beginn–Ende exklusiv; m/s bei Wind; Regen in mm)',fontsize=7,weight='bold',color=BLUE)
+    matches=daytime_events(day,weather,config)
+    fig.text(.055,.447,'WETTEREREIGNISSE 07–20 UHR (Beginn–Ende exklusiv; m/s bei Wind; Regen in mm)',fontsize=7,weight='bold',color=BLUE)
     if not matches:
-        midnight=pd.Timestamp(day,tz='Europe/Berlin');nextday=midnight+pd.DateOffset(days=1)
-        full=weather.loc[(weather.index>midnight)&(weather.index<=nextday)]
-        complete=len(full)==int((nextday-midnight).total_seconds()/600) and full[['rain_mm','rain_duration_min','wind_mean_ms','gust_ms']].notna().all().all()
+        complete=len(part)==78 and part[['rain_mm','rain_duration_min','wind_mean_ms','gust_ms']].notna().all().all()
         fig.text(.055,.427,'Kein Niederschlag, kein Wind über Schwelle (Station 03379)' if complete else 'Stationsdaten unvollständig: fehlende Intervalle/Parameter; siehe Prüfprotokoll.',fontsize=7,color='#444444')
     else:
         # Two columns, up to seven rows. Full events are never silently dropped.
@@ -115,7 +118,7 @@ def install_daily_weather(lib,weather,event_rows,ranges,mode,config):
         def save(pp,fig,label,do_check=True):
             decorate_daily(fig,d['day'],weather,event_rows,ranges,mode,config)
             original_save(pp,fig,label,do_check=False)
-            remaining=event_rows_for_day(d['day'],event_rows)[14:]
+            remaining=daytime_events(d['day'],weather,config)[14:]
             for offset in range(0,len(remaining),28):
                 extra,axis=_banner('WETTEREREIGNISSE — FORTSETZUNG',d['day']+' · '+VARIANTS[mode][1])
                 rows=[[event_label(row,d['day'])] for row in remaining[offset:offset+28]]
@@ -166,8 +169,8 @@ def weather_overview_pdf(path,daily_csv,comparison_csv,method_lines,fetch):
         for index in np.array_split(np.arange(len(daily)),max(1,math.ceil(len(daily)/28))):
             chunk=daily.iloc[index]
             fig,ax=_banner('METEOROLOGISCHE RAHMENBEDINGUNGEN — MESSTAGE','07–20 Uhr; getrennte Nachtsegmente: Wetter_je_Tag_und_Nachtsegment.csv. Regenanteil ohne Nachlaufpuffer.')
-            rows=[[r['day'],_value(r['rain_mm'],2),str(r['rain_events']),_value(r['max_intensity_mm_h']),_value(r['rain_minutes']),_value(r['wind_minutes']),_value(r['gust_max_ms']),_value(r['rain_pce_fraction']*100)+'%',_value(r['wind_pce_fraction']*100)+'%',r['qn_rain_wind_gust']] for r in chunk.to_dict('records')]
-            _table(ax,['Tag','Regen mm','Ereignisse','Max. mm/h','Regen min','Wind min','Max. Böe m/s','PCE Regen','PCE Wind','QN R/W/B'],rows,[.045,.16,.91,.69],7.6)
+            rows=[[r['day'],_value(r['rain_mm'],2),str(r['rain_events']),_value(r['max_intensity_mm_h']),_value(r['rain_minutes']),_value(r['trace_minutes']),_value(r['wind_minutes']),_value(r['gust_max_ms']),_value(r['rain_pce_fraction']*100)+'%',_value(r['wind_pce_fraction']*100)+'%',r['qn_rain_wind_gust']] for r in chunk.to_dict('records')]
+            _table(ax,['Tag','Regen mm','Ereignisse','Max. mm/h','Regen min','Spuren min','Wind min','Max. Böe m/s','PCE Regen','PCE Wind','QN R/W/B'],rows,[.045,.16,.91,.69],7.1)
             fig.text(.055,.08,'Datenbasis: Deutscher Wetterdienst · Station 03379 · CC BY 4.0',fontsize=8)
             pdf.savefig(fig);plt.close(fig)
         for index in np.array_split(np.arange(len(comparison)),max(1,math.ceil(len(comparison)/25))):
