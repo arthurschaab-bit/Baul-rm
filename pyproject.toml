@@ -19,6 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 audio = ["panns-inference>=0.1.1", "transformers>=4.41,<6", "safetensors>=0.4"]
 dev = ["pytest>=8.0"]
+recovery = ["pyarrow>=15"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

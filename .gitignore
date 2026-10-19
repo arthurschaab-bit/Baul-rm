@@ -35,3 +35,7 @@ selected_seconds.csv
 !data/meteo/**/audit.json
 !data/meteo/raw/**/*.pdf
 tmp/
+
+# Recovery-Arbeitsdaten (Beweismittel-Kopien, Datenbanken, Ergebnisse) - nie einchecken
+/data/recovery/
+recovery_work/
