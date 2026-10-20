@@ -66,6 +66,7 @@ class InventoryRow:
     duplikat_von: str = ""
     status: str = "offen"
     grund: str = ""
+    lokaler_pfad: str = ""  # absoluter Pfad der Datei auf der Platte (bei entpackten Dateien unter work/entpackt)
 
 
 @dataclass
@@ -87,7 +88,7 @@ def _add(state: _State, runde: int, path: Path, shown: str, archive: str) -> Inv
     digest = sha256_file(path)
     kind = detect_type(path)
     row = InventoryRow(runde, shown, archive, stat.st_size, datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
-                       digest, kind)
+                       digest, kind, lokaler_pfad=str(path.resolve()))
     if digest in state.first_by_hash and stat.st_size > 0:
         row.duplikat_von = state.first_by_hash[digest]
         row.status = "Duplikat"

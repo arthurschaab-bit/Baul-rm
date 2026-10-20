@@ -224,6 +224,8 @@ class Files(TempCase):
         (originals / "b.csv").write_text("a;b;c\n1;2;3\n", encoding="utf-8")
         rows = {r.pfad: r for r in inventar.build_inventory(originals, work, 1)}
         self.assertEqual(rows["outer.zip!/inner.zip!/noise_database"].typ, "SQLITE")
+        self.assertTrue(Path(rows["outer.zip!/inner.zip!/noise_database"].lokaler_pfad).is_file())
+        self.assertTrue(Path(rows["outer.zip!/inner.zip!/noise_database"].lokaler_pfad).is_relative_to(work.resolve()))
         self.assertEqual(rows["leer.zip"].status, "defekt/unlesbar")
         self.assertIn("0 Byte", rows["leer.zip"].grund)
         self.assertEqual(rows["kaputt.zip"].status, "defekt/unlesbar")

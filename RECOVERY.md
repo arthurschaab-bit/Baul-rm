@@ -44,6 +44,24 @@ python run_recovery.py bilanz --ziel $R/ziel_sekunden.parquet --gerettet $R/pce_
 python run_recovery.py stichprobe --gerettet $R/pce_gerettet.parquet --out $R/stichprobe_4e.csv
 ```
 
+### Mehrere Sicherungen prüfen (z. B. heruntergeladene Drive-Versionen)
+
+Heruntergeladene Dateien heißen alle gleich. Jede Datei **sofort nach dem Download** mit Versionsnummer und Zeitpunkt umbenennen
+(z. B. `v21_2026-09-12_1935.zip`) und nach `$R\originals\drive_versionen` legen. Das Inventar entpackt die ZIPs, erkennt die
+SQLite-Dateien (Spalte `lokaler_pfad`) und markiert inhaltsgleiche Dateien als Duplikat. Danach je Datenbank das Schema:
+
+```powershell
+$R = "D:\recovery_runde2"
+python run_recovery.py inventar --originals "$R\originals" --work "$R\work" --runde 2 --out "$R\inventar_runde2.csv"
+Import-Csv "$R\inventar_runde2.csv" -Delimiter ';' | Where-Object { $_.typ -eq 'SQLITE' -and -not $_.duplikat_von } | ForEach-Object {
+  $name = [IO.Path]::GetFileNameWithoutExtension(($_.herkunft_archiv -split '/')[-1])
+  python run_recovery.py schema --db $_.lokaler_pfad --out "$R\schema_$name.md" --integrity
+}
+```
+
+`schema_<name>.md` nennt Tabellen, Zeilenzahlen und `level_samples` je Tag und Quelle. Damit lässt sich entscheiden, welche Version
+`extrahieren` und `pruefen` braucht, ohne die großen Dateien zu übertragen.
+
 `ziel` und `pruefen` nehmen statt `--csv-ordner` auch `--csv-manifest <csv_dateien_je_tag.csv>` (Datei eines früheren Laufs mit den
 Spalten `Schema`, `Pfad`, `SHA256_lauf`, `gueltige_Sekunden_im_Zeitraum_Datei`). Gelesen werden nur App-Aggregat-CSVs mit gültigen
 Sekunden; der Hash jeder Datei wird gegen das Manifest geprüft, bei Abweichung oder fehlender Datei bricht der Befehl ab. So wird
