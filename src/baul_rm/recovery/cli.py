@@ -54,6 +54,33 @@ def _csv_files(folders: list[Path]) -> list[Path]:
     return sorted(p for folder in folders for p in folder.rglob("*.csv"))
 
 
+def _manifest_files(manifest: Path) -> list[Path]:
+    """Dateiliste eines früheren Laufs (Spalten Schema, Pfad, SHA256_lauf, gueltige_Sekunden_im_Zeitraum_Datei).
+    Nur App-Aggregat-CSVs mit gültigen Sekunden; jeder Hash wird gegen die Datei geprüft, damit genau die Fassung
+    gelesen wird, die der Lauf verwendet hat (nicht eine spätere oder ältere Kopie)."""
+    files = []
+    with open(manifest, encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle, delimiter=";"):
+            if row.get("Schema") != "app-aggregate" or not row.get("Pfad"):
+                continue
+            if int(row.get("gueltige_Sekunden_im_Zeitraum_Datei") or 0) == 0:
+                continue
+            path = Path(row["Pfad"])
+            if not path.is_file():
+                raise SystemExit(f"Manifest nennt eine fehlende Datei: {path} (nur online? bitte offline verfügbar machen)")
+            if sha256_file(path).lower() != row["SHA256_lauf"].strip().lower():
+                raise SystemExit(f"SHA-256 weicht vom Manifest ab: {path} - nicht die Fassung des Laufs")
+            files.append(path)
+    return sorted(set(files))
+
+
+def _input_csvs(args) -> list[Path]:
+    files = _csv_files(args.csv_ordner or []) + (_manifest_files(args.csv_manifest) if args.csv_manifest else [])
+    if not files:
+        raise SystemExit("Keine CSV-Dateien: --csv-ordner oder --csv-manifest angeben")
+    return sorted(set(files))
+
+
 def cmd_kopieren(args) -> None:
     hashes = kopieren.load_manifest_hashes(args.manifest) if args.manifest else None
     results = kopieren.copy_tree(args.quelle, args.ziel, hashes)
@@ -141,7 +168,7 @@ def cmd_extrahieren(args) -> None:
 
 
 def cmd_ziel(args) -> None:
-    loaded = _load_alt_csvs(_csv_files(args.csv_ordner))
+    loaded = _load_alt_csvs(_input_csvs(args))
     days = [(d, *loaded[d][1:3], loaded[d][0].name, loaded[d][3]) for d in sorted(loaded) if args.von <= d <= args.bis]
     merge.write_target_parquet(days, args.out_dir / "ziel_sekunden.parquet", args.out_dir / "ziel_tageszusammenfassung.csv")
     print(f"{len(days)} Tage; Fenster-Sekunden je Tag: {sorted({d[2] for d in days})}")
@@ -149,7 +176,7 @@ def cmd_ziel(args) -> None:
 
 def cmd_pruefen(args) -> None:
     digest = sha256_file(args.db)
-    loaded = _load_alt_csvs(_csv_files(args.csv_ordner))
+    loaded = _load_alt_csvs(_input_csvs(args))
     conn = db.open_readonly(args.db)
     has_samples, has_measure = db.has_level_samples(conn), db.has_measurements(conn)
     checks, reconstructions = [], []
@@ -233,11 +260,13 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "extrahieren":
             p.add_argument("--wal-kopie", type=Path, help="Arbeitskopie der DB MIT -wal daneben (Frames werden gesondert markiert)")
         else:
-            p.add_argument("--csv-ordner", type=Path, action="append", required=True)
+            p.add_argument("--csv-ordner", type=Path, action="append")
+            p.add_argument("--csv-manifest", type=Path, help="csv_dateien_je_tag.csv eines früheren Laufs (Hash-geprüft)")
             p.add_argument("--auch-mit-pce", action="store_true", help="4c auch dort rechnen, wo echte PCE-Samples existieren (Methodentest)")
 
     p = add("ziel", cmd_ziel, "Zielmenge aus den Alt-CSVs")
-    p.add_argument("--csv-ordner", type=Path, action="append", required=True)
+    p.add_argument("--csv-ordner", type=Path, action="append")
+    p.add_argument("--csv-manifest", type=Path, help="csv_dateien_je_tag.csv eines früheren Laufs (Hash-geprüft)")
     p.add_argument("--von", type=_day, required=True)
     p.add_argument("--bis", type=_day, required=True)
     p.add_argument("--out-dir", type=Path, required=True)

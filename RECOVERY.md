@@ -44,6 +44,11 @@ python run_recovery.py bilanz --ziel $R/ziel_sekunden.parquet --gerettet $R/pce_
 python run_recovery.py stichprobe --gerettet $R/pce_gerettet.parquet --out $R/stichprobe_4e.csv
 ```
 
+`ziel` und `pruefen` nehmen statt `--csv-ordner` auch `--csv-manifest <csv_dateien_je_tag.csv>` (Datei eines früheren Laufs mit den
+Spalten `Schema`, `Pfad`, `SHA256_lauf`, `gueltige_Sekunden_im_Zeitraum_Datei`). Gelesen werden nur App-Aggregat-CSVs mit gültigen
+Sekunden; der Hash jeder Datei wird gegen das Manifest geprüft, bei Abweichung oder fehlender Datei bricht der Befehl ab. So wird
+genau die Fassung gelesen, die der frühere Lauf verwendet hat, und nicht eine spätere oder ältere Kopie in einem Sicherungsordner.
+
 ## Methoden
 
 - **Zeitbasis:** Europe/Berlin; Auswertefenster 07:00–20:00, also 46.800 s je Tag.

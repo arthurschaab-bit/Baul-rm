@@ -9,7 +9,7 @@ from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from baul_rm.recovery import altcsv, db, inventar, kopieren, merge, pruefen
+from baul_rm.recovery import altcsv, cli, db, inventar, kopieren, merge, pruefen
 from baul_rm.recovery.common import DAY_WINDOW_SECONDS, day_window_ms, energetic_mean, sha256_file
 
 try:
@@ -254,6 +254,38 @@ class Files(TempCase):
         new_rows = list(db.pce_seconds(with_wal, DAY, only_id_above=db.max_id(intact)))
         self.assertEqual(len(new_rows), 1)
         self.assertAlmostEqual(new_rows[0].laeq, 61.0)
+
+
+class Manifest(TempCase):
+    HEADER = "Tag;Datei;Pfad;SHA256_lauf;Schema;gueltige_Sekunden_im_Zeitraum_Datei;ausgewaehlte_Sekunden_Tag\n"
+
+    def write_manifest(self, rows):
+        path = self.tmp / "csv_dateien_je_tag.csv"
+        path.write_text(self.HEADER + "".join(";".join(r) + "\n" for r in rows), encoding="utf-8-sig")
+        return path
+
+    def test_reads_exactly_the_hashed_app_files_and_skips_empty_and_other_schemas(self):
+        good, empty, legacy = (self.tmp / n for n in ("laermprotokoll_2001-09-14.csv", "laermprotokoll_2001-09-14 (1).csv", "x.csv"))
+        write_alt_csv(good, [(START, 70.0, 1, "PCE_323")])
+        empty.write_text("leer", encoding="utf-8")
+        legacy.write_text("leer", encoding="utf-8")
+        manifest = self.write_manifest([
+            ("2001-09-14", good.name, str(good), sha256_file(good), "app-aggregate", "1", "1"),
+            ("2001-09-14", empty.name, str(empty), sha256_file(empty), "app-aggregate", "0", "0"),
+            ("2001-09-14", legacy.name, str(legacy), sha256_file(legacy), "legacy-meter", "5", "5"),
+            ("2001-09-15", "keine", "", "", "", "0", "0")])
+        self.assertEqual(cli._manifest_files(manifest), [good])
+
+    def test_hash_mismatch_and_missing_file_abort(self):
+        good = self.tmp / "laermprotokoll_2001-09-14.csv"
+        write_alt_csv(good, [(START, 70.0, 1, "PCE_323")])
+        wrong = self.write_manifest([("2001-09-14", good.name, str(good), "0" * 64, "app-aggregate", "1", "1")])
+        with self.assertRaises(SystemExit):
+            cli._manifest_files(wrong)
+        missing = self.write_manifest([("2001-09-14", "nicht.csv", str(self.tmp / "nicht.csv"), "0" * 64,
+                                        "app-aggregate", "1", "1")])
+        with self.assertRaises(SystemExit):
+            cli._manifest_files(missing)
 
 
 @unittest.skipIf(pq is None, "pyarrow nicht installiert (pip install .[recovery])")
