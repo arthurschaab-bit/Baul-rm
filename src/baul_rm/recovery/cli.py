@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 
 from . import altcsv, db, inventar, kopieren, merge, pruefen
-from .common import SOURCE_MIC, days_between, local_day, sha256_file
+from .common import SOURCE_MIC, day_window_ms, days_between, local_day, sha256_file
 
 
 def _day(value: str) -> date:
@@ -186,7 +186,10 @@ def cmd_pruefen(args) -> None:
         _, rows, window_s, _ = loaded[day]
         samples = db.load_day_samples(conn, day) if has_samples else None
         measured = db.load_day_measurements(conn, day) if has_measure else None
+        window_start, window_end = day_window_ms(day)
         for row in rows:
+            if not window_start <= row.start_ms < window_end:
+                continue  # Daten werden nur für 07:00-20:00 geladen; Fenster außerhalb wären sonst "nicht prüfbar"
             if row.quelle == "PCE_323" and measured is not None and window_s == 1:
                 checks.append(pruefen.check_pure_pce_window(row, window_s, measured))
             if row.quelle != "GEMISCHT" or samples is None:

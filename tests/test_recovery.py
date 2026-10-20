@@ -177,6 +177,17 @@ class Measurements(TempCase):
         missing = pruefen.check_pure_pce_window(altcsv.AltRow(START + 60_000, 72.0, 72.0, 1, "PCE_323"), 1, measured)
         self.assertEqual(missing["status"], "PCE_NICHT_PRUEFBAR")
 
+    def test_pruefen_ignores_csv_windows_outside_the_day_window(self):
+        csv_path = self.tmp / "laermprotokoll_2001-09-14.csv"
+        write_alt_csv(csv_path, [(START - 1000, 70.0, 1, "PCE_323"), (START, 70.0, 2, "PCE_323")])
+        out = self.tmp / "pruefungen"
+        cli.main(["pruefen", "--db", str(self.database), "--csv-ordner", str(self.tmp), "--von", "2001-09-14",
+                  "--bis", "2001-09-14", "--runde", "1", "--out-dir", str(out)])
+        [check_file] = list(out.glob("pruefung_*.csv"))
+        with open(check_file, newline="", encoding="utf-8-sig") as handle:
+            rows = list(csv.DictReader(handle, delimiter=";"))
+        self.assertEqual([(r["fenster_start_ms"], r["status"]) for r in rows], [(str(START), "PCE_BESTAETIGT")])
+
     def test_database_without_measurements_is_reported_as_such(self):
         other = self.tmp / "ohne"
         conn = sqlite3.connect(other)
