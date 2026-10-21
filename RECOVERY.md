@@ -6,8 +6,10 @@ GEMISCHT, MIKROFON oder gar nicht vorliegen. Alles ist nur lesend; Eingaben werd
 (`pip install .[recovery]`). Wie überall in diesem Repository gilt `PRIVATE_REPORTS.md`: Messdateien, Datenbanken,
 Adresse und Name bleiben außerhalb des Repositorys; Tests nutzen nur synthetische Daten.
 
-**Stand:** getestet nur mit synthetischen Daten (`tests/test_recovery.py`). An echten Datenbanken ist bisher nichts davon
-gelaufen.
+**Stand:** Die Tests (`tests/test_recovery.py`, 19 Tests) nutzen nur synthetische Daten. Das Werkzeug lief außerdem in fünf Runden auf
+echten Sicherungen und Alt-CSVs des Owners; deren Ergebnisse und Dateien liegen bewusst nicht in diesem Repository. Bei einer Datenbank, die
+`PRAGMA integrity_check` nicht besteht, bricht `schema` ab (`database disk image is malformed`); lesbare Tabellen lassen sich dann nur mit eigenen
+Abfragen lesen, eine Reparatur ist nicht enthalten (siehe unten).
 
 ## Welche Tabellen gelesen werden
 
