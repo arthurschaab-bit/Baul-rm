@@ -1,0 +1,6 @@
+# Datumswerte im Format JJJJ-MM-TT; die Phasen stammen aus der privaten Vereinbarung.
+phasen:
+  - name: <PHASE_1>
+    beschreibung: <BESCHREIBUNG>
+    beginn: <JJJJ-MM-TT>
+    ende: <JJJJ-MM-TT>

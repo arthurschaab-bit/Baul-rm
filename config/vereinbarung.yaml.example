@@ -1,0 +1,12 @@
+# Nur private Kopie ausfüllen.
+werktage: <WERKTAGE>
+feiertage_land: <LAND>
+mindestabdeckung: <PROZENT>
+tage_unter_abdeckung: <REGEL>
+ende_anzahl_werktage: <ANZAHL>
+ende_schwelle_db: <DBA>
+wiederaufleben_anzahl_werktage: <ANZAHL>
+wiederaufleben_fenster_kalendertage: <ANZAHL>
+wiederaufleben_schwelle_db: <DBA>
+rundung_db: <DBA>
+toleranzabzug: <REGEL>

@@ -21,6 +21,15 @@ Aufbereit_v2/
 # Local report evidence and identity
 private/
 private_profiles/
+reports/
+bericht_privat/
+config/stammdaten.yaml
+config/deckblatt.yaml
+config/eingaben.yaml
+config/forderung.yaml
+config/vereinbarung.yaml
+config/luecken.yaml
+PRIVAT_MUSTER.txt
 *.local.json
 *.local.py
 *.sqlite
