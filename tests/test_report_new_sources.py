@@ -1,5 +1,6 @@
 import datetime as dt
 import hashlib
+import shutil
 import sqlite3
 import tempfile
 import unittest
@@ -166,6 +167,29 @@ class NewSourcesTests(unittest.TestCase):
             data, audit, _ = collect(root, "2001-01-02", "2001-01-02", [], session_manifest=mapping)
             self.assertTrue(data.empty)
             self.assertEqual(audit["sessions"][0]["outside_day_window_seconds"], 2)
+
+    def test_mapped_session_is_not_read_twice_from_daily_folder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            day = root / "2001-01-02"
+            day.mkdir()
+            mapped = root / "sessions"
+            mapped.mkdir()
+            name = "Session_02.01.2001_0700.csv"
+            content = ("Zeit;Pegel_dB;Bewertung;Flags\n"
+                       "2001-01-02T07:00:00+01:00;60;A;0\n")
+            (day / name).write_text(content, encoding="utf-8")
+            shutil.copyfile(day / name, mapped / name)
+            sha = hashlib.sha256((mapped / name).read_bytes()).hexdigest()
+            mapping = root / "mapping.csv"
+            mapping.write_text("datei;sha256;geraet_laut_app;bemerkung\n"
+                               f"sessions/{name};{sha};PCE-323;synthetic\n", encoding="utf-8")
+            without, _, _ = collect(root, "2001-01-02", "2001-01-02", [])
+            self.assertTrue(without.empty)
+            data, audit, _ = collect(root, "2001-01-02", "2001-01-02", [], session_manifest=mapping)
+            self.assertEqual(len(data), 1)
+            self.assertEqual(data.iloc[0]["origin"], "SESSION:" + name)
+            self.assertEqual(len(audit["session_files_skipped_in_daily_scan"]), 1)
 
 
 if __name__ == "__main__":

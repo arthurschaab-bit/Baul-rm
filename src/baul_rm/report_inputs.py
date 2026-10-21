@@ -260,12 +260,37 @@ def collect(root, start, end, databases, legacy_root=None, session_manifest=None
     a = int(dt.datetime.combine(dt.date.fromisoformat(start),dt.time(),TZ).timestamp())
     b = int(dt.datetime.combine(dt.date.fromisoformat(end)+dt.timedelta(days=1),dt.time(),TZ).timestamp())
     audit = {k:0 for k in ("csv_rows","bad_rows","explicit_gap_rows","flagged_rows","empty_sample_rows","invalid_level_rows")}
-    audit.update({"overlaps":[],"supplements":[],"database_days":[],"databases":[],"files":[],"sessions":[]})
+    audit.update({"overlaps":[],"supplements":[],"database_days":[],"databases":[],"files":[],
+                  "sessions":[],"session_files_skipped_in_daily_scan":[]})
     frames = []
     manifest = []
+    entries = []
+    if session_manifest is not None:
+        mapping = Path(session_manifest).resolve()
+        with mapping.open(encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter=";")
+            if not {"datei", "sha256", "geraet_laut_app", "bemerkung"} <= set(reader.fieldnames or []):
+                raise ValueError("Session manifest has missing columns")
+            entries = list(reader)
+        for entry in entries:
+            path = Path(entry["datei"])
+            if not path.is_absolute():
+                path = mapping.parent / path
+            path = path.resolve()
+            if not path.is_file():
+                raise FileNotFoundError("Session file missing: " + str(path))
+            actual_hash = file_hash(path)
+            if actual_hash != (entry["sha256"] or "").lower():
+                raise ValueError("Session SHA-256 mismatch: " + str(path))
+            entry["_path"] = path
+            entry["_sha256"] = actual_hash
+    mapped_signatures = {(entry["_path"].name, entry["_sha256"]) for entry in entries}
     # Prefer the complete canonical export over copies; CSV rows always win over backup rows.
     files = measurement_files(root, legacy_root)
     for p in files:
+        if p.name.startswith("Session_") and mapped_signatures and (p.name, file_hash(p)) in mapped_signatures:
+            audit["session_files_skipped_in_daily_scan"].append(str(p))
+            continue
         print('CSV: '+p.name,flush=True)
         with p.open(encoding="utf-8-sig", newline="") as handle:
             first=handle.readline().strip()
@@ -295,23 +320,9 @@ def collect(root, start, end, databases, legacy_root=None, session_manifest=None
                     database_data=combine(database_data,df,audit,origin+":"+day)
         manifest.append({"type":"DB-Kopie","path":str(database),"bytes":database.stat().st_size,"sha256":file_hash(database)})
     if session_manifest is not None:
-        mapping = Path(session_manifest).resolve()
-        with mapping.open(encoding="utf-8-sig", newline="") as handle:
-            reader = csv.DictReader(handle, delimiter=";")
-            if not {"datei", "sha256", "geraet_laut_app", "bemerkung"} <= set(reader.fieldnames or []):
-                raise ValueError("Session manifest has missing columns")
-            entries = list(reader)
         for entry in entries:
-            path = Path(entry["datei"])
-            if not path.is_absolute():
-                path = mapping.parent / path
-            path = path.resolve()
-            if not path.is_file():
-                raise FileNotFoundError("Session file missing: " + str(path))
-            actual_hash = file_hash(path)
-            expected_hash = (entry["sha256"] or "").lower()
-            if actual_hash != expected_hash:
-                raise ValueError("Session SHA-256 mismatch: " + str(path))
+            path = entry["_path"]
+            actual_hash = entry["_sha256"]
             record = {"path": str(path), "bytes": path.stat().st_size, "sha256": actual_hash}
             if entry["geraet_laut_app"] != "PCE-323":
                 record["ignored"] = "geraet_laut_app is not PCE-323"
