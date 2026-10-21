@@ -319,6 +319,11 @@ def collect(root, start, end, databases, legacy_root=None, session_manifest=None
                 continue
             df = read_session_export(path, record)
             df = df[(df.index >= a) & (df.index < b)]
+            # Session manifests contribute only to the report's 07:00–20:00 day window.
+            local_times = pd.to_datetime(df.index, unit="s", utc=True).tz_convert(TZ)
+            in_window = (local_times.hour >= 7) & (local_times.hour < 20)
+            record["outside_day_window_seconds"] = int((~in_window).sum())
+            df = df.loc[in_window]
             record["used_seconds"] = len(df)
             audit["sessions"].append(record)
             manifest.append({"type": "SESSION-CSV", "path": str(path),

@@ -151,6 +151,22 @@ class NewSourcesTests(unittest.TestCase):
             self.assertTrue(any(item["origin"] == "SESSION:old.csv"
                                 and item["conflicting_seconds"] == 1 for item in audit["overlaps"]))
 
+    def test_manifest_session_outside_day_window_does_not_change_selection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            session = root / "early.csv"
+            session.write_text("Zeit;Pegel_dB;Bewertung;Flags\n"
+                               "2001-01-02T06:59:59+01:00;80;A;0\n"
+                               "2001-01-02T20:00:00+01:00;80;A;0\n",
+                               encoding="utf-8")
+            sha = hashlib.sha256(session.read_bytes()).hexdigest()
+            mapping = root / "mapping.csv"
+            mapping.write_text("datei;sha256;geraet_laut_app;bemerkung\n"
+                               f"early.csv;{sha};PCE-323;synthetic\n", encoding="utf-8")
+            data, audit, _ = collect(root, "2001-01-02", "2001-01-02", [], session_manifest=mapping)
+            self.assertTrue(data.empty)
+            self.assertEqual(audit["sessions"][0]["outside_day_window_seconds"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
