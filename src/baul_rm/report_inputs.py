@@ -127,7 +127,40 @@ def read_database_day(connection, day, audit, origin):
         audit["database_days"].append({"day": day, "origin": origin, "error": str(e)})
         return pd.DataFrame(columns=COLUMNS)
     if not rows:
-        return pd.DataFrame(columns=COLUMNS)
+        required = {"id", "at", "levelDb", "source"}
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(level_samples)")}
+        if not required <= columns:
+            audit["database_days"].append({"day": day, "origin": origin,
+                                           "raw_rows": 0, "fallback_unavailable": "level_samples columns/table missing"})
+            return pd.DataFrame(columns=COLUMNS)
+        try:
+            samples = connection.execute(
+                """SELECT id,at,levelDb FROM level_samples
+                   WHERE at>=? AND at<? AND source='PCE_323' ORDER BY at,id""", (a,b)).fetchall()
+        except sqlite3.DatabaseError as e:
+            audit["database_days"].append({"day": day, "origin": origin,
+                                           "raw_rows": 0, "fallback_error": str(e)})
+            return pd.DataFrame(columns=COLUMNS)
+        fallback_origin = origin + ":level_samples"
+        audit["database_days"].append({"day": day, "origin": fallback_origin,
+                                       "fallback": "level_samples", "raw_rows": len(samples)})
+        if not samples:
+            return pd.DataFrame(columns=COLUMNS)
+        fallback = pd.DataFrame(samples, columns=["id", "ms", "level"])
+        fallback["level"] = pd.to_numeric(fallback.level, errors="coerce")
+        fallback = fallback[np.isfinite(fallback.level) & fallback.level.gt(0) & fallback.level.le(160)].copy()
+        if fallback.empty:
+            return pd.DataFrame(columns=COLUMNS)
+        fallback["second"] = fallback.ms // 1000
+        fallback["energy"] = 10**(fallback.level / 10)
+        group = fallback.groupby("second", sort=True)
+        out = pd.DataFrame({"leq": 10*np.log10(group["energy"].mean()),
+                            "maximum": group["level"].max(), "raw": group["level"].last()})
+        out["source"] = "PCE_323"
+        out["weighting"] = ""
+        out["time_weighting"] = ""
+        out["origin"] = fallback_origin
+        return out[COLUMNS]
     df = pd.DataFrame(rows, columns=["id","ms","level","weighting","flags","time_weighting","device"])
     df['level']=pd.to_numeric(df.level,errors='coerce')
     flags=pd.to_numeric(df['flags'],errors='coerce')
@@ -178,17 +211,86 @@ def measurement_files(root, legacy_root=None):
                                          -p.stat().st_size, str(p)))
 
 
-def collect(root, start, end, databases, legacy_root=None):
+def read_session_export(path, audit):
+    """Read one explicitly mapped old-app export as PCE measurement rows."""
+    rows = []
+    excluded = 0
+    first = last = None
+    total = 0
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter=";")
+        required = {"Zeit", "Pegel_dB", "Bewertung", "Flags"}
+        if not required <= set(reader.fieldnames or []):
+            raise ValueError("Session-CSV has missing columns: " + path.name)
+        for index, row in enumerate(reader):
+            total += 1
+            try:
+                instant = dt.datetime.fromisoformat(row["Zeit"])
+                second = stamp(row["Zeit"])
+                flags = int(row["Flags"])
+                level = numeric(row["Pegel_dB"])
+                if flags < 0 or flags > 2**31-1 or flags & 11 or level is None:
+                    raise ValueError("excluded row")
+            except (KeyError, TypeError, ValueError):
+                excluded += 1
+                continue
+            first = instant if first is None else min(first, instant)
+            last = instant if last is None else max(last, instant)
+            rows.append((second, instant.timestamp(), index, level, row.get("Bewertung", "") or "",
+                         row.get("Zeitbewertung", "") or ""))
+    audit.update({"rows": total, "excluded_rows": excluded,
+                  "first_timestamp": first.astimezone(TZ).isoformat() if first is not None else None,
+                  "last_timestamp": last.astimezone(TZ).isoformat() if last is not None else None})
+    if not rows:
+        return pd.DataFrame(columns=COLUMNS)
+    frame = pd.DataFrame(rows, columns=["second", "instant", "position", "level", "weighting", "time_weighting"])
+    frame = frame.sort_values(["second", "instant", "position"])
+    frame["energy"] = 10**(frame.level / 10)
+    group = frame.groupby("second", sort=True)
+    out = pd.DataFrame({"leq": 10*np.log10(group["energy"].mean()),
+                        "maximum": group["level"].max(), "raw": group["level"].last(),
+                        "weighting": group["weighting"].first(), "time_weighting": group["time_weighting"].first()})
+    out["source"] = "PCE_323"
+    out["origin"] = "SESSION:" + path.name
+    return out[COLUMNS]
+
+
+def collect(root, start, end, databases, legacy_root=None, session_manifest=None):
     days = days_between(start,end)
     a = int(dt.datetime.combine(dt.date.fromisoformat(start),dt.time(),TZ).timestamp())
     b = int(dt.datetime.combine(dt.date.fromisoformat(end)+dt.timedelta(days=1),dt.time(),TZ).timestamp())
     audit = {k:0 for k in ("csv_rows","bad_rows","explicit_gap_rows","flagged_rows","empty_sample_rows","invalid_level_rows")}
-    audit.update({"overlaps":[],"supplements":[],"database_days":[],"databases":[],"files":[]})
+    audit.update({"overlaps":[],"supplements":[],"database_days":[],"databases":[],"files":[],
+                  "sessions":[],"session_files_skipped_in_daily_scan":[]})
     frames = []
     manifest = []
+    entries = []
+    if session_manifest is not None:
+        mapping = Path(session_manifest).resolve()
+        with mapping.open(encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter=";")
+            if not {"datei", "sha256", "geraet_laut_app", "bemerkung"} <= set(reader.fieldnames or []):
+                raise ValueError("Session manifest has missing columns")
+            entries = list(reader)
+        for entry in entries:
+            path = Path(entry["datei"])
+            if not path.is_absolute():
+                path = mapping.parent / path
+            path = path.resolve()
+            if not path.is_file():
+                raise FileNotFoundError("Session file missing: " + str(path))
+            actual_hash = file_hash(path)
+            if actual_hash != (entry["sha256"] or "").lower():
+                raise ValueError("Session SHA-256 mismatch: " + str(path))
+            entry["_path"] = path
+            entry["_sha256"] = actual_hash
+    mapped_signatures = {(entry["_path"].name, entry["_sha256"]) for entry in entries}
     # Prefer the complete canonical export over copies; CSV rows always win over backup rows.
     files = measurement_files(root, legacy_root)
     for p in files:
+        if p.name.startswith("Session_") and mapped_signatures and (p.name, file_hash(p)) in mapped_signatures:
+            audit["session_files_skipped_in_daily_scan"].append(str(p))
+            continue
         print('CSV: '+p.name,flush=True)
         with p.open(encoding="utf-8-sig", newline="") as handle:
             first=handle.readline().strip()
@@ -217,6 +319,28 @@ def collect(root, start, end, databases, legacy_root=None):
                 if not df.empty:
                     database_data=combine(database_data,df,audit,origin+":"+day)
         manifest.append({"type":"DB-Kopie","path":str(database),"bytes":database.stat().st_size,"sha256":file_hash(database)})
+    if session_manifest is not None:
+        for entry in entries:
+            path = entry["_path"]
+            actual_hash = entry["_sha256"]
+            record = {"path": str(path), "bytes": path.stat().st_size, "sha256": actual_hash}
+            if entry["geraet_laut_app"] != "PCE-323":
+                record["ignored"] = "geraet_laut_app is not PCE-323"
+                audit["sessions"].append(record)
+                continue
+            df = read_session_export(path, record)
+            df = df[(df.index >= a) & (df.index < b)]
+            # Session manifests contribute only to the report's 07:00–20:00 day window.
+            local_times = pd.to_datetime(df.index, unit="s", utc=True).tz_convert(TZ)
+            in_window = (local_times.hour >= 7) & (local_times.hour < 20)
+            record["outside_day_window_seconds"] = int((~in_window).sum())
+            df = df.loc[in_window]
+            record["used_seconds"] = len(df)
+            audit["sessions"].append(record)
+            manifest.append({"type": "SESSION-CSV", "path": str(path),
+                             "bytes": path.stat().st_size, "sha256": actual_hash})
+            if not df.empty:
+                database_data = combine(database_data, df, audit, "SESSION:" + path.name)
     # Audit CSV/DB differences before replacing any original mixed aggregate.
     combine(data,database_data,audit,'CSV versus separate PCE database')
     selected,excluded,selection=resolve_pce_seconds(data,database_data)

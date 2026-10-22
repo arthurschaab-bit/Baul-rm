@@ -14,6 +14,9 @@ Der Rechenkern bietet die PCE-Quellenauswahl mit DB-Vorrang für gemischte Sekun
 
 `run_pce_inputs.py` importiert ältere Geräte-CSV, App-Aggregate, App-Sitzungen und reine PCE-Datenbankzeilen. Die lokalen Eingaben und Ausgaben werden ausschließlich per Parameter übergeben. Beispiel mit fiktiven Pfaden und Daten:
 
+Fehlen PCE-Zeilen eines Tages in `measurements` vollständig, kann `level_samples` als PCE-Datenbankquelle einspringen.
+Mit `--session-manifest` werden ausschließlich extern zugeordnete und per SHA-256 geprüfte PCE-Session-Exporte zusätzlich eingelesen.
+
 ```powershell
 python run_pce_inputs.py --input C:\PrivateReports\exports --database C:\PrivateReports\backup.sqlite --start 2001-01-01 --end 2001-01-31 --output C:\PrivateReports\result
 ```
