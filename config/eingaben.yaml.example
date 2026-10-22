@@ -1,0 +1,13 @@
+# Positivliste: jede Quelle muss ausdrücklich freigegeben sein.
+quellen:
+  csv_tagesordner: <FREIGEGEBENER_ORDNER_ODER_MUSTER>
+  datenbank: <FREIGEGEBENE_DATEI>
+  beweissicherung: []
+  kalibrierfotos_drive_ordner_id: <ORDNER_ID>
+  bautaetigkeit: <FREIGEGEBENER_ORDNER>
+  kalibrierung_lokal: <FREIGEGEBENER_ORDNER>
+nur_lesen: []
+ausschluss_muster:
+  - "*tagebuch*"
+  - "*notiz*"
+  - "*chronik*"

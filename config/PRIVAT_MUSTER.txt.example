@@ -1,0 +1,5 @@
+# Ein privates Suchmuster pro Zeile, als regulärer Ausdruck; Groß-/Kleinschreibung egal.
+# Sonderzeichen wie . ( ) + ? [ ] mit \ schützen, wenn sie wörtlich gemeint sind.
+# Datei als UTF-8 speichern. Keine echten Werte in diese Vorlage schreiben.
+# Platzhalterzeilen in spitzen Klammern lehnt die Prüfung ab.
+<NAME_ODER_ADRESSTEIL>
