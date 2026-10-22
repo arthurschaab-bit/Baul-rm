@@ -21,8 +21,8 @@ Aufbereit_v2/
 # Local report evidence and identity
 private/
 private_profiles/
-reports/
-bericht_privat/
+/reports/
+/bericht_privat/
 config/stammdaten.yaml
 config/deckblatt.yaml
 config/eingaben.yaml

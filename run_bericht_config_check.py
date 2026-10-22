@@ -16,6 +16,21 @@ FIELDS = {
     "luecken.yaml": ("technischer_ausfall", "abwesenheit", "ruhetag_referenz_ebene1", "ruhetag_referenz_intern", "ungeklaerte_quelle"),
 }
 FORBIDDEN = ("tagebuch", "notiz", "chronik")
+PLACEHOLDER = re.compile(r"^<[^<>]+>$")
+
+
+def read_text(path: Path) -> str:
+    """Read UTF-8 (with or without BOM) or UTF-16 text; Windows editors write all three."""
+    raw = path.read_bytes()
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16")
+    return raw.decode("utf-8-sig")
+
+
+def load_patterns(path: Path) -> list[str]:
+    """Return the private search patterns: one regular expression per line, comments with #."""
+    return [line.strip() for line in read_text(path).splitlines()
+            if line.strip() and not line.lstrip().startswith("#")]
 
 
 def validate(root: Path, pattern_file: Path | None = None) -> list[str]:
@@ -31,7 +46,7 @@ def validate(root: Path, pattern_file: Path | None = None) -> list[str]:
             errors.append(f"{name}: fehlt")
             continue
         try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            data = yaml.safe_load(read_text(path))
         except (OSError, UnicodeError, yaml.YAMLError):
             errors.append(f"{name}: YAML-Formatfehler")
             continue
@@ -57,32 +72,57 @@ def validate(root: Path, pattern_file: Path | None = None) -> list[str]:
                         errors.append(f"{name}: quellen.{key} trifft Ausschlussmuster")
             if not isinstance(data.get("ausschluss_muster"), list):
                 errors.append(f"{name}: ausschluss_muster muss eine Liste sein")
+        if name == "luecken.yaml":
+            reference = data.get("ruhetag_referenz_ebene1")
+            if reference is not None and not (isinstance(reference, str) and reference.startswith("<")):
+                try:
+                    date.fromisoformat(str(reference))
+                except ValueError:
+                    errors.append(f"{name}: ruhetag_referenz_ebene1 braucht JJJJ-MM-TT")
         if name == "forderung.yaml":
             phases = data.get("phasen")
             if not isinstance(phases, list) or len(phases) != 3:
                 errors.append(f"{name}: genau drei Phasen erwartet")
             else:
+                spans = []
                 for index, phase in enumerate(phases, 1):
                     if not isinstance(phase, dict) or not phase.get("name") or not phase.get("beginn"):
                         errors.append(f"{name}: Phase {index} unvollständig")
+                        spans.append(None)
                         continue
+                    parsed = {}
                     for key in ("beginn", "ende"):
                         value = phase.get(key)
                         if value is None and key == "ende" and index == 3:
+                            parsed[key] = None
                             continue
                         try:
-                            date.fromisoformat(str(value))
+                            parsed[key] = date.fromisoformat(str(value))
                         except ValueError:
+                            parsed[key] = None
                             errors.append(f"{name}: Phase {index} {key} braucht JJJJ-MM-TT")
+                    spans.append(parsed)
+                    if parsed["beginn"] and parsed["ende"] and parsed["ende"] < parsed["beginn"]:
+                        errors.append(f"{name}: Phase {index} endet vor ihrem Beginn")
+                for index, (before, after) in enumerate(zip(spans, spans[1:]), 1):
+                    if before and after and before["ende"] and after["beginn"] and after["beginn"] <= before["ende"]:
+                        errors.append(f"{name}: Phase {index + 1} beginnt nicht nach dem Ende von Phase {index}")
     pattern_file = pattern_file or root / "PRIVAT_MUSTER.txt"
     if not pattern_file.is_file():
         errors.append("PRIVAT_MUSTER.txt: fehlt")
     else:
-        patterns = [line.strip() for line in pattern_file.read_text(encoding="utf-8").splitlines()
-                    if line.strip() and not line.lstrip().startswith("#")]
-        if not patterns:
-            errors.append("PRIVAT_MUSTER.txt: leer")
+        try:
+            patterns = load_patterns(pattern_file)
+        except (OSError, UnicodeError):
+            errors.append("PRIVAT_MUSTER.txt: nicht lesbar (UTF-8 oder UTF-16 erwartet)")
+            patterns = []
+        else:
+            if not patterns:
+                errors.append("PRIVAT_MUSTER.txt: leer")
         for index, pattern in enumerate(patterns, 1):
+            if PLACEHOLDER.match(pattern):
+                errors.append(f"PRIVAT_MUSTER.txt: Zeile {index} ist ein Platzhalter")
+                continue
             try:
                 re.compile(pattern, re.IGNORECASE)
             except re.error:
