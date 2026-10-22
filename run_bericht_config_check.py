@@ -9,7 +9,7 @@ import yaml
 
 
 FIELDS = {
-    "deckblatt.yaml": ("titel", "untertitel", "zeile", "namen"),
+    "deckblatt.yaml": ("titel", "untertitel", "zeile", "namen", "adresse"),
     "eingaben.yaml": ("quellen", "nur_lesen", "ausschluss_muster"),
     "forderung.yaml": ("phasen",),
     "vereinbarung.yaml": ("werktage", "feiertage_land", "mindestabdeckung", "tage_unter_abdeckung", "ende_anzahl_werktage", "ende_schwelle_db", "wiederaufleben_anzahl_werktage", "wiederaufleben_fenster_kalendertage", "wiederaufleben_schwelle_db", "rundung_db", "toleranzabzug"),
