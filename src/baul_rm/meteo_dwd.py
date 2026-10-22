@@ -265,11 +265,11 @@ def fetch_weather(root,start,end,station='03379',refresh=False):
     (cache.directory/'audit.json').write_text(json.dumps(audit,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
     # Analysis tables derive exclusively from this normalized CSV after publication.
     candidate.replace(processed/'meteo_10min.csv')
+    (processed/'audit.json').write_text(json.dumps(audit,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
     saved={'start':start,'end':end,'station':station,'fetched_at_utc':cache.fetched_at,
            'raw_directory':cache.directory.relative_to(root).as_posix(),
            'processed_sha256':sha256((processed/'meteo_10min.csv').read_bytes()),
            'audit_sha256':sha256((processed/'audit.json').read_bytes()),'attribution':ATTRIBUTION}
-    (processed/'audit.json').write_text(json.dumps(audit,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
     state.write_text(json.dumps(saved,ensure_ascii=False,indent=2),encoding='utf-8')
     return saved
 
