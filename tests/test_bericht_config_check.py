@@ -14,7 +14,7 @@ import run_bericht_config_check as check  # noqa: E402
 
 VEREINBARUNG = "\n".join(f"{key}: 1" for key in check.FIELDS["vereinbarung.yaml"]) + "\n"
 GOOD = {
-    "deckblatt.yaml": "titel: T\nuntertitel: U\nzeile: Z\nnamen: N\n",
+    "deckblatt.yaml": "titel: T\nuntertitel: U\nzeile: Z\nnamen: N\nadresse: A\n",
     "eingaben.yaml": ("quellen:\n  csv_tagesordner: A\n  datenbank: B\n  beweissicherung: [C]\n"
                       "  kalibrierfotos_drive_ordner_id: D\n  bautaetigkeit: E\n  kalibrierung_lokal: F\n"
                       "nur_lesen: []\nausschluss_muster: ['*tagebuch*']\n"),
@@ -46,7 +46,7 @@ class ConfigCheckTests(unittest.TestCase):
         self.assertIn("luecken.yaml: fehlt", check.validate(root))
 
     def test_placeholder_values_are_reported(self):
-        errors = check.validate(make_root(**{"deckblatt.yaml": "titel: <TITEL>\nuntertitel: U\nzeile: Z\nnamen: N\n"}))
+        errors = check.validate(make_root(**{"deckblatt.yaml": "titel: <TITEL>\nuntertitel: U\nzeile: Z\nnamen: N\nadresse: A\n"}))
         self.assertIn("deckblatt.yaml: titel fehlt oder ist Platzhalter", errors)
 
     def test_root_inside_repository_is_rejected(self):
