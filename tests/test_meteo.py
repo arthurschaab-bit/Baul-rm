@@ -62,8 +62,26 @@ def test_wind_gust_direction_and_half_open_buffer():
     ranges=exclusion_ranges([event]);a=ranges[0]['begin_second'];b=ranges[0]['end_second_exclusive']
     assert interval_mask([a-1,a,b-1,b],ranges).tolist()==[False,True,True,False]
     frame.iloc[8,frame.columns.get_loc('rain_duration_min')]=1
+    trace=next(r for r in events(frame) if r['type']=='Spuren')
+    assert trace['rain_mm']==0 and trace['rain_minutes']==1
+    assert not exclusion_ranges([trace])
+    frame.iloc[8,frame.columns.get_loc('rain_mm')]=.01
     rain=next(r for r in exclusion_ranges(events(frame)) if r['reason'].startswith('Niederschlag'))
     assert rain['end_second_exclusive']-rain['begin_second']==1200
+
+
+def test_trace_minutes_are_separate_from_measurable_rain():
+    frame=weather().iloc[:144].copy()
+    frame.index=pd.date_range('2026-07-01 00:10',periods=144,freq='10min',tz='Europe/Berlin')
+    frame.iloc[2,frame.columns.get_loc('rain_duration_min')]=8
+    frame.iloc[3,frame.columns.get_loc('rain_mm')]=.01
+    frame.iloc[3,frame.columns.get_loc('rain_duration_min')]=9
+    rows=events(frame)
+    assert [r['type'] for r in rows]==['Spuren','Niederschlag']
+    assert len(exclusion_ranges(rows))==1
+    summary=next(r for r in daily_weather(frame,'2026-07-01',rows) if r['segment']=='vor07')
+    assert summary['trace_minutes']==8
+    assert summary['rain_minutes']==9
 
 
 def test_variants_denominator_bounds_threshold_changes_and_completeness(tmp_path):
